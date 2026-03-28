@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import './App.css'
+import TabBitcoin from './content/TabBitcoin'
+import EntryVisual from './content/EntryVisual'
 
 function App() {
   const [activeTab, setActiveTab] = useState(0)
@@ -26,12 +28,13 @@ function App() {
         </nav>
       </header>
       
-      <main className="main-content">
-        <div className="content-section">
-          <h1>{tabs[activeTab].name}</h1>
-          <p className="text-amber-400">Placeholder</p>
-        </div>
-      </main>
+      <div className="flex h-screen items-center justify-center">
+        {/* <TabBitcoin/> */}
+        <EntryVisual/>
+        {/* <div className="content-section">
+          {/* <h1>{tabs[activeTab].name}</h1>
+          <p className="text-amber-400">Placeholder</p> */}
+      </div>
     </div>
   )
 }
