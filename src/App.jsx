@@ -5,6 +5,8 @@ import TabBitcoin from './content/TabBitcoin.jsx'
 import ToggleButton from './content/ToggleButton.jsx'
 import ApiTest from './content/ApiTest.jsx'
 import TradingViewChart from './content/TradingViewChart.jsx'
+import Reader from './content/Reader.jsx'
+import InteractiveChart from './content/InteractiveChart.jsx'
 
 // Define your tab components here - easy to add new ones!
 const tabComponents = {
@@ -13,6 +15,8 @@ const tabComponents = {
   toggleButton: ToggleButton,
   apiTest: ApiTest,
   tvChart: TradingViewChart,
+  reader: Reader,
+  interactiveChart: InteractiveChart,
 }
 
 // Tab configuration - easy to modify and extend
@@ -22,6 +26,8 @@ const tabs = [
   { id: 'toggleButton', name: 'Toggle', component: tabComponents.toggleButton },
   { id: 'apiTest', name: 'API Test', component: tabComponents.apiTest },
   { id: 'tvChart', name: 'Charts', component: tabComponents.tvChart },
+  { id: 'interactiveChart', name: 'Key Points', component: tabComponents.interactiveChart },
+  { id: 'reader', name: 'Reader', component: tabComponents.reader },
 ]
 
 function App() {

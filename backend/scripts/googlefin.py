@@ -1,29 +1,38 @@
-
 import requests
 import json
 import sys
 
-CF_BRTI_BITCOIN = "https://www.cfbenchmarks.com/data/indices/BRTI"
-CF_BRTI_BITCOIN_PRICE_HTML = "<span class=\"text-sm font-semibold tabular-nums md:text-2xl\">"
+COINGECKO_API = "https://api.coingecko.com/api/v3/simple/price"
 
 def get_bitcoin_price():
     try:
-        with requests.get(CF_BRTI_BITCOIN, stream=True) as r:
-            r.raise_for_status()
-            
-            content = ""
-            for chunk in r.iter_content(chunk_size=1024, decode_unicode=True):
-                if chunk:
-                    content += chunk
-                    
-                    if CF_BRTI_BITCOIN_PRICE_HTML in content:
-                        r.close() 
-                        break
-
-        content = content[content.find(CF_BRTI_BITCOIN_PRICE_HTML) + len(CF_BRTI_BITCOIN_PRICE_HTML):]
-        price = content[:content.find("<")]
+        params = {
+            "ids": "bitcoin",
+            "vs_currencies": "usd",
+            "include_24hr_change": "true"
+        }
         
-        return json.dumps({"price": price.strip(), "source": "CF Benchmarks BRTI"})
+        response = requests.get(COINGECKO_API, params=params, timeout=10)
+        response.raise_for_status()
+        
+        data = response.json()
+        
+        if "bitcoin" in data:
+            price = data["bitcoin"]["usd"]
+            change_24h = data["bitcoin"].get("usd_24h_change", 0)
+            
+            return json.dumps({
+                "price": f"${price:,.2f}",
+                "price_raw": price,
+                "change_24h": f"{change_24h:+.2f}%",
+                "change_24h_raw": change_24h,
+                "source": "CoinGecko"
+            })
+        else:
+            return json.dumps({"error": "Bitcoin data not found in response"})
+            
+    except requests.exceptions.RequestException as e:
+        return json.dumps({"error": f"Network error: {str(e)}"})
     except Exception as e:
         return json.dumps({"error": str(e)})
 
