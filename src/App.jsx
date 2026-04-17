@@ -7,6 +7,7 @@ import ApiTest from './content/ApiTest.jsx'
 import TradingViewChart from './content/TradingViewChart.jsx'
 import Reader from './content/Reader.jsx'
 import InteractiveChart from './content/InteractiveChart.jsx'
+import TvInteractiveChart from './content/tvInteractiveChart.jsx'
 
 // Define your tab components here - easy to add new ones!
 const tabComponents = {
@@ -17,6 +18,7 @@ const tabComponents = {
   tvChart: TradingViewChart,
   reader: Reader,
   interactiveChart: InteractiveChart,
+  tvInteractiveChart: TvInteractiveChart,
 }
 
 // Tab configuration - easy to modify and extend
@@ -27,6 +29,7 @@ const tabs = [
   { id: 'apiTest', name: 'API Test', component: tabComponents.apiTest },
   { id: 'tvChart', name: 'Charts', component: tabComponents.tvChart },
   { id: 'interactiveChart', name: 'Key Points', component: tabComponents.interactiveChart },
+  { id: 'tvInteractiveChart', name: 'TV Chart', component: tabComponents.tvInteractiveChart },
   { id: 'reader', name: 'Reader', component: tabComponents.reader },
 ]
 
