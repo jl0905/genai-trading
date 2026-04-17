@@ -69,6 +69,26 @@ app.post('/api/googlefin', async (req, res) => {
   }
 });
 
+// Stock data endpoints
+app.get('/api/stock', async (req, res) => {
+  try {
+    const { symbol = 'AAPL', period = '6mo' } = req.query;
+    const data = await runPythonScript('stockdata.py', [`--symbol=${symbol}`, `--period=${period}`]);
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/stocks/multi', async (req, res) => {
+  try {
+    const data = await runPythonScript('stockdata.py', ['--multi']);
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.listen(port, () => {
   console.log(`Backend server running on http://localhost:${port}`);
 });

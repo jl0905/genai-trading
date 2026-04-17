@@ -24,4 +24,15 @@ export const api = {
     });
     return response.json();
   },
+
+  // Stock data endpoints
+  getStockData: async (symbol = 'AAPL', period = '6mo') => {
+    const response = await fetch(`${API_BASE_URL}/stock?symbol=${symbol}&period=${period}`);
+    return response.json();
+  },
+
+  getMultipleStocks: async () => {
+    const response = await fetch(`${API_BASE_URL}/stocks/multi`);
+    return response.json();
+  },
 };
