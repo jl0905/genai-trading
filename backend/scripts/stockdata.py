@@ -72,14 +72,14 @@ def get_stock_data(symbol="AAPL", period="6mo"):
             "data_points": len(price_data)
         }
         
-        return json.dumps(result)
+        return result
         
     except Exception as e:
-        return json.dumps({
+        return {
             "success": False,
             "error": str(e),
             "symbol": symbol
-        })
+        }
 
 def get_multiple_stocks(symbols=["AAPL", "GOOGL", "MSFT", "TSLA", "AMZN"]):
     """
@@ -111,7 +111,7 @@ def get_multiple_stocks(symbols=["AAPL", "GOOGL", "MSFT", "TSLA", "AMZN"]):
                 "error": str(e)
             })
     
-    return json.dumps({"stocks": results, "count": len(results)})
+    return {"stocks": results, "count": len(results)}
 
 if __name__ == "__main__":
     import argparse

@@ -21,20 +21,20 @@ def get_bitcoin_price():
             price = data["bitcoin"]["usd"]
             change_24h = data["bitcoin"].get("usd_24h_change", 0)
             
-            return json.dumps({
+            return {
                 "price": f"${price:,.2f}",
                 "price_raw": price,
                 "change_24h": f"{change_24h:+.2f}%",
                 "change_24h_raw": change_24h,
                 "source": "CoinGecko"
-            })
+            }
         else:
-            return json.dumps({"error": "Bitcoin data not found in response"})
+            return {"error": "Bitcoin data not found in response"}
             
     except requests.exceptions.RequestException as e:
-        return json.dumps({"error": f"Network error: {str(e)}"})
+        return {"error": f"Network error: {str(e)}"}
     except Exception as e:
-        return json.dumps({"error": str(e)})
+        return {"error": str(e)}
 
 if __name__ == "__main__":
     result = get_bitcoin_price()

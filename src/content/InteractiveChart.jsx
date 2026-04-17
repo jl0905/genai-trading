@@ -11,6 +11,7 @@ import {
 } from 'chart.js';
 import { Chart } from 'react-chartjs-2';
 import annotationPlugin from 'chartjs-plugin-annotation';
+import { CandlestickController, CandlestickElement } from 'chartjs-chart-financial';
 import { api } from '../api.js';
 
 ChartJS.register(
@@ -21,7 +22,9 @@ ChartJS.register(
   Title,
   Tooltip,
   Legend,
-  annotationPlugin
+  annotationPlugin,
+  CandlestickController,
+  CandlestickElement
 );
 
 const POPULAR_STOCKS = [
@@ -117,7 +120,19 @@ export default function InteractiveChart() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastUpdate, setLastUpdate] = useState(null);
+  const [chartType, setChartType] = useState('line');
   const chartRef = useRef(null);
+  const refreshTimeoutRef = useRef(null);
+  const isVisibleRef = useRef(true);
+
+  // Track tab visibility to pause polling when hidden
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      isVisibleRef.current = document.visibilityState === 'visible';
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
 
   // Fetch stock data
   const fetchStockData = useCallback(async () => {
@@ -146,39 +161,48 @@ export default function InteractiveChart() {
     }
   }, [symbol, period]);
 
-  // Initial fetch and polling
+  // Initial fetch and polling (only when tab is visible)
   useEffect(() => {
     fetchStockData();
     
-    // Poll every 30 seconds for updates
-    const interval = setInterval(fetchStockData, 30000);
+    // Poll every 30 seconds for updates, but only if tab is visible
+    const interval = setInterval(() => {
+      if (isVisibleRef.current) {
+        fetchStockData();
+      }
+    }, 30000);
     
     return () => clearInterval(interval);
   }, [fetchStockData]);
   
   const chartData = useMemo(() => {
+    if (chartType === 'candlestick') {
+      return {
+        datasets: [{
+          label: 'Price',
+          data: stockData.map(d => ({
+            x: new Date(d.date).getTime(),
+            o: d.open,
+            h: d.high,
+            l: d.low,
+            c: d.price
+          })),
+          borderColors: {
+            up: '#44ff44',
+            down: '#ff4444',
+            unchanged: '#888888'
+          },
+          backgroundColors: {
+            up: 'rgba(68, 255, 68, 0.5)',
+            down: 'rgba(255, 68, 68, 0.5)',
+            unchanged: 'rgba(136, 136, 136, 0.5)'
+          }
+        }]
+      };
+    }
+    
     const prices = stockData.map(d => d.price);
     const dates = stockData.map(d => d.date);
-    
-    // Create annotations for key points
-    const annotations = {};
-    keyPoints.forEach((point, idx) => {
-      const color = point.type === 'peak' ? '#ff4444' : 
-                    point.type === 'trough' ? '#44ff44' : '#ffaa00';
-      
-      annotations[`point${idx}`] = {
-        type: 'point',
-        xValue: point.date,
-        yValue: point.price,
-        backgroundColor: color,
-        borderColor: '#ffffff',
-        borderWidth: 2,
-        radius: 8,
-        hoverRadius: 12,
-        pointStyle: 'circle',
-        display: true
-      };
-    });
     
     return {
       labels: dates,
@@ -196,95 +220,133 @@ export default function InteractiveChart() {
         }
       ]
     };
-  }, [stockData, keyPoints]);
+  }, [stockData, keyPoints, chartType]);
   
-  const options = {
-    responsive: true,
-    maintainAspectRatio: false,
-    interaction: {
-      intersect: false,
-      mode: 'index'
-    },
-    plugins: {
-      legend: {
-        display: false
+  // Memoize chart options to prevent unnecessary re-renders
+  const options = useMemo(() => {
+    const isCandlestick = chartType === 'candlestick';
+    
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: {
+        duration: 0
       },
-      title: {
-        display: true,
-        text: 'Interactive Stock Chart - Click markers for details',
-        color: '#ffffff',
-        font: {
-          size: 16,
-          family: 'Courier New, monospace'
+      interaction: {
+        intersect: false,
+        mode: 'index'
+      },
+      plugins: {
+        legend: {
+          display: false
+        },
+        title: {
+          display: true,
+          text: isCandlestick ? 'Candlestick Chart - Click markers for details' : 'Interactive Stock Chart - Click markers for details',
+          color: '#ffffff',
+          font: {
+            size: 16,
+            family: 'Courier New, monospace'
+          }
+        },
+        tooltip: {
+          enabled: true,
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          titleColor: '#ffffff',
+          bodyColor: '#ffffff',
+          borderColor: '#ffffff',
+          borderWidth: 1,
+          callbacks: {
+            title: (items) => {
+              if (isCandlestick && items.length > 0 && items[0].raw?.x) {
+                return new Date(items[0].raw.x).toLocaleDateString();
+              }
+              return items[0]?.label || '';
+            },
+            label: (context) => {
+              if (isCandlestick) {
+                const raw = context.raw;
+                return [
+                  `Open: $${raw.o.toFixed(2)}`,
+                  `High: $${raw.h.toFixed(2)}`,
+                  `Low: $${raw.l.toFixed(2)}`,
+                  `Close: $${raw.c.toFixed(2)}`
+                ];
+              }
+              return `Price: $${context.parsed.y.toFixed(2)}`;
+            }
+          }
+        },
+        annotation: {
+          annotations: keyPoints.reduce((acc, point, idx) => {
+            const color = point.type === 'peak' ? '#ff4444' : 
+                          point.type === 'trough' ? '#44ff44' : '#ffaa00';
+            
+            acc[`point${idx}`] = {
+              type: 'point',
+              xValue: isCandlestick ? new Date(point.date).getTime() : point.date,
+              yValue: point.price,
+              backgroundColor: color,
+              borderColor: '#ffffff',
+              borderWidth: 2,
+              radius: 10,
+              hoverRadius: 14
+            };
+            
+            return acc;
+          }, {})
         }
       },
-      tooltip: {
-        enabled: true,
-        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-        titleColor: '#ffffff',
-        bodyColor: '#ffffff',
-        borderColor: '#ffffff',
-        borderWidth: 1,
-        callbacks: {
-          label: (context) => {
-            return `Price: $${context.parsed.y.toFixed(2)}`;
+      scales: {
+        x: isCandlestick ? {
+          type: 'linear',
+          grid: {
+            color: 'rgba(255, 255, 255, 0.1)',
+            borderColor: '#ffffff'
+          },
+          ticks: {
+            color: '#ffffff',
+            maxTicksLimit: 6,
+            callback: (value) => {
+              const date = new Date(value);
+              return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            }
+          }
+        } : {
+          grid: {
+            color: 'rgba(255, 255, 255, 0.1)',
+            borderColor: '#ffffff'
+          },
+          ticks: {
+            color: '#ffffff',
+            maxTicksLimit: 6
+          }
+        },
+        y: {
+          grid: {
+            color: 'rgba(255, 255, 255, 0.1)',
+            borderColor: '#ffffff'
+          },
+          ticks: {
+            color: '#ffffff',
+            maxTicksLimit: 6,
+            callback: (value) => `$${value}`
           }
         }
       },
-      annotation: {
-        annotations: keyPoints.reduce((acc, point, idx) => {
-          const color = point.type === 'peak' ? '#ff4444' : 
-                        point.type === 'trough' ? '#44ff44' : '#ffaa00';
+      onClick: (event, elements) => {
+        if (elements && elements.length > 0) {
+          const index = elements[0].index;
+          const clickedPoint = keyPoints.find(kp => kp.index === index);
           
-          acc[`point${idx}`] = {
-            type: 'point',
-            xValue: point.date,
-            yValue: point.price,
-            backgroundColor: color,
-            borderColor: '#ffffff',
-            borderWidth: 2,
-            radius: 10,
-            hoverRadius: 14
-          };
-          
-          return acc;
-        }, {})
-      }
-    },
-    scales: {
-      x: {
-        grid: {
-          color: 'rgba(255, 255, 255, 0.1)',
-          borderColor: '#ffffff'
-        },
-        ticks: {
-          color: '#ffffff',
-          maxTicksLimit: 8
-        }
-      },
-      y: {
-        grid: {
-          color: 'rgba(255, 255, 255, 0.1)',
-          borderColor: '#ffffff'
-        },
-        ticks: {
-          color: '#ffffff',
-          callback: (value) => `$${value}`
+          if (clickedPoint) {
+            setSelectedPoint(clickedPoint);
+            setModalPosition({ x: event.x, y: event.y });
+          }
         }
       }
-    },
-    onClick: (event, elements) => {
-      if (elements && elements.length > 0) {
-        const index = elements[0].index;
-        const clickedPoint = keyPoints.find(kp => kp.index === index);
-        
-        if (clickedPoint) {
-          setSelectedPoint(clickedPoint);
-          setModalPosition({ x: event.x, y: event.y });
-        }
-      }
-    }
-  };
+    };
+  }, [keyPoints, chartType]);
   
   const closeModal = () => {
     setSelectedPoint(null);
@@ -304,19 +366,58 @@ export default function InteractiveChart() {
     return `${vol}`;
   };
   
+  // Skeleton loader for initial load - shows layout immediately
   if (loading && stockData.length === 0) {
     return (
       <div style={{ 
         width: '100%', 
         height: '100vh', 
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
+        padding: '20px',
         backgroundColor: '#000000',
-        color: '#ffffff',
-        fontFamily: 'Courier New, monospace'
+        fontFamily: 'Courier New, monospace',
+        overflow: 'hidden'
       }}>
-        <div>Loading stock data...</div>
+        {/* Header skeleton */}
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          marginBottom: '15px',
+          paddingBottom: '15px',
+          borderBottom: '2px solid #333'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+            <div style={{ width: '80px', height: '24px', backgroundColor: '#222', borderRadius: '4px' }} />
+            <div style={{ width: '120px', height: '16px', backgroundColor: '#222', borderRadius: '4px' }} />
+          </div>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <div style={{ width: '150px', height: '36px', backgroundColor: '#222', borderRadius: '4px' }} />
+            <div style={{ width: '120px', height: '36px', backgroundColor: '#222', borderRadius: '4px' }} />
+            <div style={{ width: '100px', height: '36px', backgroundColor: '#222', borderRadius: '4px' }} />
+          </div>
+        </div>
+        
+        {/* Stats skeleton */}
+        <div style={{
+          display: 'flex',
+          gap: '30px',
+          marginBottom: '20px',
+          padding: '15px',
+          backgroundColor: '#111',
+          border: '1px solid #333'
+        }}>
+          {[1,2,3,4,5].map(i => (
+            <div key={i}>
+              <div style={{ width: '80px', height: '12px', backgroundColor: '#222', marginBottom: '8px', borderRadius: '2px' }} />
+              <div style={{ width: '100px', height: '28px', backgroundColor: '#222', borderRadius: '4px' }} />
+            </div>
+          ))}
+        </div>
+        
+        {/* Chart skeleton */}
+        <div style={{ height: 'calc(100% - 220px)', backgroundColor: '#111', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ color: '#444' }}>Loading stock data...</div>
+        </div>
       </div>
     );
   }
@@ -407,20 +508,46 @@ export default function InteractiveChart() {
           </select>
           
           <button
-            onClick={fetchStockData}
+            onClick={() => setChartType(chartType === 'line' ? 'candlestick' : 'line')}
             style={{
-              backgroundColor: '#fff',
+              backgroundColor: chartType === 'candlestick' ? '#00d4ff' : '#fff',
+              color: '#000',
+              border: `2px solid ${chartType === 'candlestick' ? '#00d4ff' : '#fff'}`,
+              padding: '8px 12px',
+              fontFamily: 'Courier New, monospace',
+              fontSize: '14px',
+              cursor: 'pointer',
+              fontWeight: 'bold',
+              textTransform: 'uppercase'
+            }}
+          >
+            {chartType === 'candlestick' ? 'Candle' : 'Line'}
+          </button>
+          
+          <button
+            onClick={() => {
+              // Debounce refresh clicks
+              if (refreshTimeoutRef.current) return;
+              fetchStockData();
+              refreshTimeoutRef.current = setTimeout(() => {
+                refreshTimeoutRef.current = null;
+              }, 1000);
+            }}
+            disabled={loading}
+            style={{
+              backgroundColor: loading ? '#666' : '#fff',
               color: '#000',
               border: '2px solid #fff',
               padding: '8px 16px',
               fontFamily: 'Courier New, monospace',
               fontSize: '14px',
               fontWeight: 'bold',
-              cursor: 'pointer',
-              textTransform: 'uppercase'
+              cursor: loading ? 'not-allowed' : 'pointer',
+              textTransform: 'uppercase',
+              opacity: loading ? 0.6 : 1
             }}
           >
-            Refresh
+            {loading ? 'Loading...' : 'Refresh'}
           </button>
         </div>
       </div>
@@ -524,7 +651,7 @@ export default function InteractiveChart() {
       <div style={{ height: 'calc(100% - 220px)', position: 'relative' }}>
         <Chart 
           ref={chartRef}
-          type="line" 
+          type={chartType === 'candlestick' ? 'candlestick' : 'line'} 
           data={chartData} 
           options={options}
         />
