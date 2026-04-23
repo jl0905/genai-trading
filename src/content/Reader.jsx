@@ -469,46 +469,53 @@ export default function Reader() {
       color: '#ffffff',
       overflow: 'hidden'
     }}>
+      {/* Table of Contents — narrow, subtle sidebar */}
       <div className="table-of-contents" style={{ 
-        width: '300px', 
-        borderRight: '2px solid #ffffff', 
+        width: '200px', 
+        borderRight: '1px solid #333333', 
         overflowY: 'auto', 
-        padding: '20px',
+        padding: '16px 12px',
         backgroundColor: '#000000',
         flexShrink: 0,
         height: '100vh',
         position: 'sticky',
         top: 0
       }}>
-        <h3 style={{ marginBottom: '20px', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '1px' }}>Table of Contents</h3>
+        <h4 style={{
+          marginBottom: '16px', color: '#666666',
+          textTransform: 'uppercase', letterSpacing: '2px',
+          fontSize: '10px', fontWeight: '600'
+        }}>Contents</h4>
         <nav>
           <ul style={{ listStyle: 'none', padding: 0 }}>
             {visibleSections.map(section => (
-              <li key={section.id} style={{ marginBottom: '8px' }}>
+              <li key={section.id} style={{ marginBottom: '2px' }}>
                 <button
                   onClick={() => scrollToSection(section.id)}
                   style={{
                     width: '100%',
                     textAlign: 'left',
-                    padding: '8px 12px',
-                    border: '2px solid #ffffff',
-                    backgroundColor: activeSection === section.id ? '#ffffff' : '#000000',
-                    color: activeSection === section.id ? '#000000' : '#ffffff',
+                    padding: '6px 10px',
+                    border: 'none',
+                    borderLeft: activeSection === section.id ? '2px solid #ffffff' : '2px solid transparent',
+                    backgroundColor: 'transparent',
+                    color: activeSection === section.id ? '#ffffff' : '#666666',
                     cursor: 'pointer',
-                    fontSize: '14px',
-                    fontWeight: 'bold',
-                    textTransform: 'uppercase',
-                    letterSpacing: '1px',
-                    transition: 'background-color 0.1s ease'
+                    fontSize: '12px',
+                    fontWeight: activeSection === section.id ? '600' : '400',
+                    letterSpacing: '0.3px',
+                    transition: 'all 0.15s ease',
+                    fontFamily: 'Courier New, monospace',
+                    borderRadius: 0
                   }}
                   onMouseEnter={(e) => {
                     if (activeSection !== section.id) {
-                      e.target.style.backgroundColor = '#333333';
+                      e.target.style.color = '#aaaaaa';
                     }
                   }}
                   onMouseLeave={(e) => {
                     if (activeSection !== section.id) {
-                      e.target.style.backgroundColor = '#000000';
+                      e.target.style.color = '#666666';
                     }
                   }}
                 >
@@ -520,15 +527,20 @@ export default function Reader() {
         </nav>
       </div>
 
-      <div className="main-content" style={{ 
+      {/* Reading pane — hidden scrollbar, content skewed slightly right */}
+      <div className="main-content reader-scroll-hidden" style={{ 
         flex: 1, 
         overflowY: 'auto', 
         overflowX: 'hidden',
-        padding: '40px',
+        padding: '40px 60px 40px 40px',
         backgroundColor: '#000000',
         height: '100vh'
       }} ref={contentRef}>
-        <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+        <style>{`
+          .reader-scroll-hidden::-webkit-scrollbar { display: none; }
+          .reader-scroll-hidden { -ms-overflow-style: none; scrollbar-width: none; }
+        `}</style>
+        <div style={{ maxWidth: '720px', margin: '0 auto', paddingLeft: '40px' }}>
           {visibleSections.map(section => (
             <section
               key={section.id}

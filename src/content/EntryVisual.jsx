@@ -153,13 +153,14 @@ export default function EntryVisual() {
         return (
                 <div 
                         ref={containerRef}
-                        className="flex items-center justify-center min-h-screen bg-black cursor-move select-none"
+                        className="flex items-center justify-center min-h-screen cursor-move select-none"
+                        style={{ backgroundColor: 'var(--bg-main)' }}
                         onMouseDown={handleMouseDown}
                         onMouseMove={handleMouseMove}
                         onMouseUp={handleMouseUp}
                         onMouseLeave={handleMouseUp}
                 >
-                        <pre className="text-green-400 text-xs leading-none font-mono whitespace-pre">
+                        <pre className="text-xs leading-none font-mono whitespace-pre" style={{ color: 'var(--accent)' }}>
                                 {donut}
                         </pre>
                 </div>

@@ -14,30 +14,31 @@ A React-based financial dashboard with real-time stock charts and technical anal
 - lightweight-charts (`^5.1.0`)
 
 **Backend & Scripts:**
-- Express (`^5.2.1`) (Runs on Port 3001)
-- cors (`^2.8.6`), dotenv (`^17.4.0`)
-- concurrently (`^9.2.1`)
-- Python Scripts: `yfinance`, `requests` (spawned via Node child process)
+- FastAPI & Uvicorn (Runs on Port 3000)
+- Python integration natively via `main.py`
+- Python Scripts: `yfinance`, `requests`
 
 ## Project Structure
 - `src/`: React frontend (`App.jsx` handles 8 tabs, `api.js` connects to backend).
 - `src/content/`: Tab components (e.g., `InteractiveChart.jsx`, `tvInteractiveChart.jsx`).
-- `backend/server.js`: Express server acting as a bridge.
+- `backend/main.py`: FastAPI server acting as the backend.
 - `backend/scripts/`: Python scripts for data fetching (`stockdata.py`, `googlefin.py`).
 
 ## Essential Commands & Endpoints
 - **Start App**: `npm run start` (Runs both frontend and backend concurrently)
-- **Backend APIs** (localhost:3001): 
+- **Backend APIs** (localhost:3000): 
   - `GET /api/stock?symbol=AAPL&period=6mo`
+  - `GET /api/stock/range?symbol=AAPL&start=2024-01-01&end=2024-07-01` — Date-range fetch for dynamic chart loading
   - `GET /api/stocks/multi`
   - `GET /api/googlefin`
-- **Frontend APIs**: Accessible via `api.js` (e.g., `api.getStockData()`).
+  - `GET /api/search?q=AAPL` — Proxies Yahoo Finance search, filters to US equities & ETFs only (exchanges: NMS, NYQ, ASE, PNK, NYM, NCM, NGS, OEM, OQS; quoteTypes: EQUITY, ETF)
+- **Frontend APIs**: Accessible via `api.js` (e.g., `api.getStockData()`, `api.getStockDataRange()`, `api.searchStocks(query)`).
 
 ## Key Components
 - **InteractiveChart.jsx**: Uses Chart.js with the annotation plugin to show line/candlestick charts with peak/trough/breakout key points.
-- **TvInteractiveChart.jsx**: Uses lightweight-charts for a sleek, TradingView-style candlestick view with volume overlays. Real-time 30s background polling.
+- **TvInteractiveChart.jsx**: Uses lightweight-charts for a sleek, TradingView-style candlestick view with volume overlays. Dynamic infinite-scroll loading — starts with 6 months, loads 6-month chunks as user scrolls/zooms left. Real-time 30s background polling.
 
 ## Important Notes
-- Frontend: Port 5173 | Backend: Port 3001.
+- Frontend: Port 5173 | Backend: Port 3000.
 - Windows environment - use PowerShell or CMD.
-- API endpoints parse Python `stdout` into JSON.
+- API endpoints return native Python dictionaries serialized by FastAPI.

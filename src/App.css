@@ -6,10 +6,12 @@
 
 body {
   font-family: 'Courier New', monospace;
-  background-color: #000000;
-  color: #ffffff;
+  background-color: var(--bg-main);
+  color: var(--text-main);
   height: 100vh;
   overflow: hidden;
+  transition: background-color 0.3s ease, color 0.3s ease;
+  font-weight: 600;
 }
 
 .app {
@@ -19,8 +21,9 @@ body {
 }
 
 .header {
-  border-bottom: 2px solid #ffffff;
-  background-color: #000000;
+  border-bottom: 2px solid var(--border-focus);
+  background-color: var(--bg-main);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .tabs-container {
@@ -31,27 +34,27 @@ body {
 }
 
 .tab {
-  background-color: #000000;
-  color: #ffffff;
-  border: 2px solid #ffffff;
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  border: 2px solid var(--border-focus);
   border-bottom: none;
   padding: 12px 24px;
   font-family: 'Courier New', monospace;
   font-size: 14px;
   font-weight: bold;
   cursor: pointer;
-  transition: background-color 0.1s ease;
+  transition: background-color 0.2s ease, color 0.2s ease;
   text-transform: uppercase;
   letter-spacing: 1px;
 }
 
 .tab:hover {
-  background-color: #333333;
+  background-color: var(--bg-panel);
 }
 
 .tab.active {
-  background-color: #ffffff;
-  color: #000000;
+  background-color: var(--text-main);
+  color: var(--bg-main);
 }
 
 .tab:not(:last-child) {
@@ -63,5 +66,6 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
-  background-color: #000000;
+  background-color: var(--bg-main);
+  transition: background-color 0.3s ease;
 }

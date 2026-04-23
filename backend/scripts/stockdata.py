@@ -113,6 +113,56 @@ def get_multiple_stocks(symbols=["AAPL", "GOOGL", "MSFT", "TSLA", "AMZN"]):
     
     return {"stocks": results, "count": len(results)}
 
+def get_stock_data_range(symbol="AAPL", start=None, end=None):
+    """
+    Fetch stock OHLCV data for a specific date range.
+    Used for dynamic chart loading when the user scrolls/zooms.
+    Returns only historical price data (no company info or real-time stats).
+    """
+    try:
+        ticker = yf.Ticker(symbol)
+
+        kwargs = {"interval": "1d"}
+        if start:
+            kwargs["start"] = start
+        if end:
+            kwargs["end"] = end
+
+        hist = ticker.history(**kwargs)
+
+        if hist.empty:
+            return {
+                "success": True,
+                "historical": [],
+                "symbol": symbol.upper(),
+                "data_points": 0
+            }
+
+        price_data = []
+        for date, row in hist.iterrows():
+            price_data.append({
+                "date": date.strftime("%Y-%m-%d"),
+                "price": round(row["Close"], 2),
+                "open": round(row["Open"], 2),
+                "high": round(row["High"], 2),
+                "low": round(row["Low"], 2),
+                "volume": int(row["Volume"])
+            })
+
+        return {
+            "success": True,
+            "historical": price_data,
+            "symbol": symbol.upper(),
+            "data_points": len(price_data)
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "symbol": symbol
+        }
+
 if __name__ == "__main__":
     import argparse
     
