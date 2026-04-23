@@ -13,6 +13,7 @@ import { Chart } from 'react-chartjs-2';
 import annotationPlugin from 'chartjs-plugin-annotation';
 import { CandlestickController, CandlestickElement } from 'chartjs-chart-financial';
 import { api } from '../api.js';
+import { useTheme } from '../ThemeContext.jsx';
 
 ChartJS.register(
   CategoryScale,
@@ -40,7 +41,6 @@ const POPULAR_STOCKS = [
   { symbol: 'INTC', name: 'Intel Corp.' }
 ];
 
-// Detect key points: peaks, troughs, and significant price movements
 const detectKeyPoints = (data, sensitivity = 3) => {
   const keyPoints = [];
   const windowSize = 5;
@@ -52,7 +52,6 @@ const detectKeyPoints = (data, sensitivity = 3) => {
     const max = Math.max(...prices);
     const min = Math.min(...prices);
     
-    // Peak detection
     if (current === max && current > data[i-1].price && current > data[i+1].price) {
       const significance = (current - data[i-1].price) / data[i-1].price * 100;
       if (significance > 0.5) {
@@ -68,7 +67,6 @@ const detectKeyPoints = (data, sensitivity = 3) => {
       }
     }
     
-    // Trough detection
     if (current === min && current < data[i-1].price && current < data[i+1].price) {
       const significance = (data[i-1].price - current) / data[i-1].price * 100;
       if (significance > 0.5) {
@@ -85,11 +83,9 @@ const detectKeyPoints = (data, sensitivity = 3) => {
     }
   }
   
-  // Detect significant breakouts (price movements > 5%)
   for (let i = 1; i < data.length; i++) {
     const change = (data[i].price - data[i-1].price) / data[i-1].price * 100;
     if (Math.abs(change) > 5) {
-      // Check if not already marked as peak/trough nearby
       const nearby = keyPoints.filter(kp => Math.abs(kp.index - i) <= 2);
       if (nearby.length === 0) {
         keyPoints.push({
@@ -125,7 +121,14 @@ export default function InteractiveChart() {
   const refreshTimeoutRef = useRef(null);
   const isVisibleRef = useRef(true);
 
-  // Track tab visibility to pause polling when hidden
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+
+  const gridColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+  const tooltipBg = isDark ? 'rgba(0, 0, 0, 0.8)' : 'rgba(255, 255, 255, 0.9)';
+  const tooltipColor = isDark ? '#ffffff' : '#000000';
+  const textColor = isDark ? '#ffffff' : '#000000';
+
   useEffect(() => {
     const handleVisibilityChange = () => {
       isVisibleRef.current = document.visibilityState === 'visible';
@@ -134,7 +137,6 @@ export default function InteractiveChart() {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
-  // Fetch stock data
   const fetchStockData = useCallback(async () => {
     try {
       setLoading(true);
@@ -148,7 +150,6 @@ export default function InteractiveChart() {
         setRealTimeData(data.real_time);
         setLastUpdate(new Date());
         
-        // Detect key points on real data
         const points = detectKeyPoints(data.historical);
         setKeyPoints(points);
       } else {
@@ -161,11 +162,9 @@ export default function InteractiveChart() {
     }
   }, [symbol, period]);
 
-  // Initial fetch and polling (only when tab is visible)
   useEffect(() => {
     fetchStockData();
     
-    // Poll every 30 seconds for updates, but only if tab is visible
     const interval = setInterval(() => {
       if (isVisibleRef.current) {
         fetchStockData();
@@ -222,7 +221,6 @@ export default function InteractiveChart() {
     };
   }, [stockData, keyPoints, chartType]);
   
-  // Memoize chart options to prevent unnecessary re-renders
   const options = useMemo(() => {
     const isCandlestick = chartType === 'candlestick';
     
@@ -243,7 +241,7 @@ export default function InteractiveChart() {
         title: {
           display: true,
           text: isCandlestick ? 'Candlestick Chart - Click markers for details' : 'Interactive Stock Chart - Click markers for details',
-          color: '#ffffff',
+          color: textColor,
           font: {
             size: 16,
             family: 'Courier New, monospace'
@@ -251,10 +249,10 @@ export default function InteractiveChart() {
         },
         tooltip: {
           enabled: true,
-          backgroundColor: 'rgba(0, 0, 0, 0.8)',
-          titleColor: '#ffffff',
-          bodyColor: '#ffffff',
-          borderColor: '#ffffff',
+          backgroundColor: tooltipBg,
+          titleColor: tooltipColor,
+          bodyColor: tooltipColor,
+          borderColor: textColor,
           borderWidth: 1,
           callbacks: {
             title: (items) => {
@@ -287,7 +285,7 @@ export default function InteractiveChart() {
               xValue: isCandlestick ? new Date(point.date).getTime() : point.date,
               yValue: point.price,
               backgroundColor: color,
-              borderColor: '#ffffff',
+              borderColor: textColor,
               borderWidth: 2,
               radius: 10,
               hoverRadius: 14
@@ -301,11 +299,11 @@ export default function InteractiveChart() {
         x: isCandlestick ? {
           type: 'linear',
           grid: {
-            color: 'rgba(255, 255, 255, 0.1)',
-            borderColor: '#ffffff'
+            color: gridColor,
+            borderColor: textColor
           },
           ticks: {
-            color: '#ffffff',
+            color: textColor,
             maxTicksLimit: 6,
             callback: (value) => {
               const date = new Date(value);
@@ -314,21 +312,21 @@ export default function InteractiveChart() {
           }
         } : {
           grid: {
-            color: 'rgba(255, 255, 255, 0.1)',
-            borderColor: '#ffffff'
+            color: gridColor,
+            borderColor: textColor
           },
           ticks: {
-            color: '#ffffff',
+            color: textColor,
             maxTicksLimit: 6
           }
         },
         y: {
           grid: {
-            color: 'rgba(255, 255, 255, 0.1)',
-            borderColor: '#ffffff'
+            color: gridColor,
+            borderColor: textColor
           },
           ticks: {
-            color: '#ffffff',
+            color: textColor,
             maxTicksLimit: 6,
             callback: (value) => `$${value}`
           }
@@ -346,7 +344,7 @@ export default function InteractiveChart() {
         }
       }
     };
-  }, [keyPoints, chartType]);
+  }, [keyPoints, chartType, theme, gridColor, tooltipBg, tooltipColor, textColor]);
   
   const closeModal = () => {
     setSelectedPoint(null);
@@ -366,57 +364,53 @@ export default function InteractiveChart() {
     return `${vol}`;
   };
   
-  // Skeleton loader for initial load - shows layout immediately
   if (loading && stockData.length === 0) {
     return (
       <div style={{ 
         width: '100%', 
         height: '100vh', 
         padding: '20px',
-        backgroundColor: '#000000',
+        backgroundColor: 'var(--bg-main)',
         fontFamily: 'Courier New, monospace',
         overflow: 'hidden'
       }}>
-        {/* Header skeleton */}
         <div style={{ 
           display: 'flex', 
           justifyContent: 'space-between', 
           alignItems: 'center',
           marginBottom: '15px',
           paddingBottom: '15px',
-          borderBottom: '2px solid #333'
+          borderBottom: '2px solid var(--border-main)'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-            <div style={{ width: '80px', height: '24px', backgroundColor: '#222', borderRadius: '4px' }} />
-            <div style={{ width: '120px', height: '16px', backgroundColor: '#222', borderRadius: '4px' }} />
+            <div style={{ width: '80px', height: '24px', backgroundColor: 'var(--bg-panel)', borderRadius: '4px' }} />
+            <div style={{ width: '120px', height: '16px', backgroundColor: 'var(--bg-panel)', borderRadius: '4px' }} />
           </div>
           <div style={{ display: 'flex', gap: '10px' }}>
-            <div style={{ width: '150px', height: '36px', backgroundColor: '#222', borderRadius: '4px' }} />
-            <div style={{ width: '120px', height: '36px', backgroundColor: '#222', borderRadius: '4px' }} />
-            <div style={{ width: '100px', height: '36px', backgroundColor: '#222', borderRadius: '4px' }} />
+            <div style={{ width: '150px', height: '36px', backgroundColor: 'var(--bg-panel)', borderRadius: '4px' }} />
+            <div style={{ width: '120px', height: '36px', backgroundColor: 'var(--bg-panel)', borderRadius: '4px' }} />
+            <div style={{ width: '100px', height: '36px', backgroundColor: 'var(--bg-panel)', borderRadius: '4px' }} />
           </div>
         </div>
         
-        {/* Stats skeleton */}
         <div style={{
           display: 'flex',
           gap: '30px',
           marginBottom: '20px',
           padding: '15px',
-          backgroundColor: '#111',
-          border: '1px solid #333'
+          backgroundColor: 'var(--bg-panel)',
+          border: '1px solid var(--border-main)'
         }}>
           {[1,2,3,4,5].map(i => (
             <div key={i}>
-              <div style={{ width: '80px', height: '12px', backgroundColor: '#222', marginBottom: '8px', borderRadius: '2px' }} />
-              <div style={{ width: '100px', height: '28px', backgroundColor: '#222', borderRadius: '4px' }} />
+              <div style={{ width: '80px', height: '12px', backgroundColor: 'var(--bg-main)', marginBottom: '8px', borderRadius: '2px' }} />
+              <div style={{ width: '100px', height: '28px', backgroundColor: 'var(--bg-main)', borderRadius: '4px' }} />
             </div>
           ))}
         </div>
         
-        {/* Chart skeleton */}
-        <div style={{ height: 'calc(100% - 220px)', backgroundColor: '#111', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ color: '#444' }}>Loading stock data...</div>
+        <div style={{ height: 'calc(100% - 220px)', backgroundColor: 'var(--bg-panel)', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ color: 'var(--text-muted)' }}>Loading stock data...</div>
         </div>
       </div>
     );
@@ -430,8 +424,8 @@ export default function InteractiveChart() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#000000',
-        color: '#ff4444',
+        backgroundColor: 'var(--bg-main)',
+        color: 'var(--chart-down)',
         fontFamily: 'Courier New, monospace'
       }}>
         <div>Error: {error}</div>
@@ -442,26 +436,26 @@ export default function InteractiveChart() {
   return (
     <div style={{ 
       width: '100%', 
-      height: '100vh', 
+      height: '100%', 
       padding: '20px',
-      backgroundColor: '#000000',
+      backgroundColor: 'var(--bg-main)',
+      color: 'var(--text-main)',
       fontFamily: 'Courier New, monospace',
       overflow: 'hidden'
     }}>
-      {/* Header with Stock Selector */}
       <div style={{ 
         display: 'flex', 
         justifyContent: 'space-between', 
         alignItems: 'center',
         marginBottom: '15px',
         paddingBottom: '15px',
-        borderBottom: '2px solid #333'
+        borderBottom: '2px solid var(--border-main)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-          <h2 style={{ color: '#ffffff', margin: 0, fontSize: '20px' }}>
+          <h2 style={{ margin: 0, fontSize: '20px' }}>
             {stockInfo?.symbol || symbol}
           </h2>
-          <span style={{ color: '#888', fontSize: '14px' }}>
+          <span style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
             {stockInfo?.name || 'Loading...'}
           </span>
         </div>
@@ -471,9 +465,9 @@ export default function InteractiveChart() {
             value={symbol}
             onChange={(e) => setSymbol(e.target.value)}
             style={{
-              backgroundColor: '#000',
-              color: '#fff',
-              border: '2px solid #fff',
+              backgroundColor: 'var(--bg-main)',
+              color: 'var(--text-main)',
+              border: '2px solid var(--border-focus)',
               padding: '8px 12px',
               fontFamily: 'Courier New, monospace',
               fontSize: '14px',
@@ -491,9 +485,9 @@ export default function InteractiveChart() {
             value={period}
             onChange={(e) => setPeriod(e.target.value)}
             style={{
-              backgroundColor: '#000',
-              color: '#fff',
-              border: '2px solid #fff',
+              backgroundColor: 'var(--bg-main)',
+              color: 'var(--text-main)',
+              border: '2px solid var(--border-focus)',
               padding: '8px 12px',
               fontFamily: 'Courier New, monospace',
               fontSize: '14px',
@@ -510,9 +504,9 @@ export default function InteractiveChart() {
           <button
             onClick={() => setChartType(chartType === 'line' ? 'candlestick' : 'line')}
             style={{
-              backgroundColor: chartType === 'candlestick' ? '#00d4ff' : '#fff',
-              color: '#000',
-              border: `2px solid ${chartType === 'candlestick' ? '#00d4ff' : '#fff'}`,
+              backgroundColor: chartType === 'candlestick' ? 'var(--accent)' : 'var(--bg-main)',
+              color: chartType === 'candlestick' ? '#ffffff' : 'var(--text-main)',
+              border: `2px solid ${chartType === 'candlestick' ? 'var(--accent)' : 'var(--border-focus)'}`,
               padding: '8px 12px',
               fontFamily: 'Courier New, monospace',
               fontSize: '14px',
@@ -526,7 +520,6 @@ export default function InteractiveChart() {
           
           <button
             onClick={() => {
-              // Debounce refresh clicks
               if (refreshTimeoutRef.current) return;
               fetchStockData();
               refreshTimeoutRef.current = setTimeout(() => {
@@ -535,9 +528,9 @@ export default function InteractiveChart() {
             }}
             disabled={loading}
             style={{
-              backgroundColor: loading ? '#666' : '#fff',
-              color: '#000',
-              border: '2px solid #fff',
+              backgroundColor: loading ? 'var(--bg-panel)' : 'var(--bg-main)',
+              color: 'var(--text-main)',
+              border: '2px solid var(--border-focus)',
               padding: '8px 16px',
               fontFamily: 'Courier New, monospace',
               fontSize: '14px',
@@ -552,27 +545,26 @@ export default function InteractiveChart() {
         </div>
       </div>
 
-      {/* Real-Time Stock Info */}
       {realTimeData && (
         <div style={{
           display: 'flex',
           gap: '30px',
           marginBottom: '20px',
           padding: '15px',
-          backgroundColor: '#111',
-          border: '1px solid #333'
+          backgroundColor: 'var(--bg-panel)',
+          border: '1px solid var(--border-main)'
         }}>
           <div>
-            <div style={{ color: '#888', fontSize: '12px', textTransform: 'uppercase' }}>Current Price</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: '12px', textTransform: 'uppercase' }}>Current Price</div>
             <div style={{ 
-              color: realTimeData.change >= 0 ? '#44ff44' : '#ff4444',
+              color: realTimeData.change >= 0 ? 'var(--chart-up)' : 'var(--chart-down)',
               fontSize: '28px',
               fontWeight: 'bold'
             }}>
               ${realTimeData.current_price.toFixed(2)}
             </div>
             <div style={{ 
-              color: realTimeData.change >= 0 ? '#44ff44' : '#ff4444',
+              color: realTimeData.change >= 0 ? 'var(--chart-up)' : 'var(--chart-down)',
               fontSize: '14px'
             }}>
               {realTimeData.change >= 0 ? '+' : ''}{realTimeData.change.toFixed(2)} ({realTimeData.change_percent.toFixed(2)}%)
@@ -580,23 +572,23 @@ export default function InteractiveChart() {
           </div>
           
           <div>
-            <div style={{ color: '#888', fontSize: '12px', textTransform: 'uppercase' }}>Day Range</div>
-            <div style={{ color: '#fff', fontSize: '16px' }}>
+            <div style={{ color: 'var(--text-muted)', fontSize: '12px', textTransform: 'uppercase' }}>Day Range</div>
+            <div style={{ fontSize: '16px' }}>
               ${realTimeData.day_low} - ${realTimeData.day_high}
             </div>
           </div>
           
           <div>
-            <div style={{ color: '#888', fontSize: '12px', textTransform: 'uppercase' }}>Volume</div>
-            <div style={{ color: '#fff', fontSize: '16px' }}>
+            <div style={{ color: 'var(--text-muted)', fontSize: '12px', textTransform: 'uppercase' }}>Volume</div>
+            <div style={{ fontSize: '16px' }}>
               {formatVolume(realTimeData.volume)}
             </div>
           </div>
           
           {stockInfo?.market_cap > 0 && (
             <div>
-              <div style={{ color: '#888', fontSize: '12px', textTransform: 'uppercase' }}>Market Cap</div>
-              <div style={{ color: '#fff', fontSize: '16px' }}>
+              <div style={{ color: 'var(--text-muted)', fontSize: '12px', textTransform: 'uppercase' }}>Market Cap</div>
+              <div style={{ fontSize: '16px' }}>
                 {formatMarketCap(stockInfo.market_cap)}
               </div>
             </div>
@@ -604,34 +596,33 @@ export default function InteractiveChart() {
           
           {stockInfo?.pe_ratio && (
             <div>
-              <div style={{ color: '#888', fontSize: '12px', textTransform: 'uppercase' }}>P/E Ratio</div>
-              <div style={{ color: '#fff', fontSize: '16px' }}>
+              <div style={{ color: 'var(--text-muted)', fontSize: '12px', textTransform: 'uppercase' }}>P/E Ratio</div>
+              <div style={{ fontSize: '16px' }}>
                 {stockInfo.pe_ratio.toFixed(2)}
               </div>
             </div>
           )}
           
           <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
-            <div style={{ color: '#888', fontSize: '12px', textTransform: 'uppercase' }}>Last Updated</div>
-            <div style={{ color: '#fff', fontSize: '12px' }}>
+            <div style={{ color: 'var(--text-muted)', fontSize: '12px', textTransform: 'uppercase' }}>Last Updated</div>
+            <div style={{ fontSize: '12px' }}>
               {lastUpdate?.toLocaleTimeString() || 'N/A'}
             </div>
-            {loading && <div style={{ color: '#00d4ff', fontSize: '11px' }}>Updating...</div>}
+            {loading && <div style={{ color: 'var(--accent)', fontSize: '11px' }}>Updating...</div>}
           </div>
         </div>
       )}
       
-      {/* Legend */}
       <div style={{ 
         display: 'flex', 
         justifyContent: 'space-between', 
         alignItems: 'center',
         marginBottom: '15px'
       }}>
-        <div style={{ color: '#888', fontSize: '14px' }}>
+        <div style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
           Click markers for analysis details
         </div>
-        <div style={{ display: 'flex', gap: '20px', color: '#ffffff' }}>
+        <div style={{ display: 'flex', gap: '20px', color: 'var(--text-main)' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
             <span style={{ width: '10px', height: '10px', backgroundColor: '#ff4444', borderRadius: '50%' }}></span>
             Peak
@@ -647,7 +638,6 @@ export default function InteractiveChart() {
         </div>
       </div>
       
-      {/* Chart */}
       <div style={{ height: 'calc(100% - 220px)', position: 'relative' }}>
         <Chart 
           ref={chartRef}
@@ -663,14 +653,14 @@ export default function InteractiveChart() {
             position: 'fixed',
             left: Math.min(modalPosition.x + 20, window.innerWidth - 300),
             top: Math.min(modalPosition.y, window.innerHeight - 200),
-            backgroundColor: '#000000',
-            border: '2px solid #ffffff',
+            backgroundColor: 'var(--bg-main)',
+            border: '2px solid var(--border-focus)',
             padding: '20px',
             borderRadius: '0',
             boxShadow: '0 4px 20px rgba(0, 0, 0, 0.5)',
             zIndex: 1000,
             maxWidth: '300px',
-            color: '#ffffff'
+            color: 'var(--text-main)'
           }}
         >
           <div style={{ 
@@ -678,7 +668,7 @@ export default function InteractiveChart() {
             justifyContent: 'space-between', 
             alignItems: 'center',
             marginBottom: '15px',
-            borderBottom: '1px solid #ffffff',
+            borderBottom: '1px solid var(--border-main)',
             paddingBottom: '10px'
           }}>
             <h3 style={{ margin: 0, fontSize: '16px', textTransform: 'uppercase' }}>
@@ -690,7 +680,7 @@ export default function InteractiveChart() {
               style={{
                 background: 'none',
                 border: 'none',
-                color: '#ffffff',
+                color: 'var(--text-main)',
                 fontSize: '20px',
                 cursor: 'pointer',
                 padding: '0',
@@ -715,7 +705,7 @@ export default function InteractiveChart() {
             <p style={{ margin: '5px 0' }}>
               <strong>Significance:</strong> {selectedPoint.significance.toFixed(2)}%
             </p>
-            <p style={{ margin: '10px 0 0 0', padding: '10px', backgroundColor: '#111', borderLeft: '3px solid #00d4ff' }}>
+            <p style={{ margin: '10px 0 0 0', padding: '10px', backgroundColor: 'var(--bg-panel)', borderLeft: '3px solid var(--accent)' }}>
               {selectedPoint.description}
             </p>
           </div>

@@ -5,11 +5,12 @@ export default function TabBitcoin() {
                                 {[...Array(9)].map((_, index) => (
                                         <div 
                                                 key={index}
-                                                className="bg-lime-300 border-2 border-lime-500 rounded-lg hover:bg-lime-400 transition-colors duration-200"
+                                                style={{ backgroundColor: 'var(--chart-up)', borderColor: 'var(--accent)' }}
+                                                className="border-2 rounded-lg opacity-80 hover:opacity-100 transition-opacity duration-200"
                                         />
                                 ))}
                         </div>
-                        <div className="text-lime-300">Hi!</div>
+                        <div style={{ color: 'var(--chart-up)' }} className="mt-4 font-bold text-xl">Hi!</div>
                 </div>
         )
 }

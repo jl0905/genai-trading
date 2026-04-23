@@ -1,83 +1,147 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createChart, ColorType, CrosshairMode, CandlestickSeries, HistogramSeries } from 'lightweight-charts';
 import { api } from '../api.js';
+import { useTheme } from '../ThemeContext.jsx';
 
-const POPULAR_STOCKS = [
-  { symbol: 'AAPL', name: 'Apple Inc.' },
-  { symbol: 'GOOGL', name: 'Alphabet Inc.' },
-  { symbol: 'MSFT', name: 'Microsoft Corp.' },
-  { symbol: 'TSLA', name: 'Tesla Inc.' },
-  { symbol: 'AMZN', name: 'Amazon.com Inc.' },
-  { symbol: 'NVDA', name: 'NVIDIA Corp.' },
-  { symbol: 'META', name: 'Meta Platforms Inc.' },
-  { symbol: 'NFLX', name: 'Netflix Inc.' },
-  { symbol: 'AMD', name: 'Advanced Micro Devices' },
-  { symbol: 'INTC', name: 'Intel Corp.' }
-];
-
-const PERIODS = [
-  { value: '1d', label: '1 Day' },
-  { value: '5d', label: '5 Days' },
-  { value: '1mo', label: '1 Month' },
-  { value: '3mo', label: '3 Months' },
-  { value: '6mo', label: '6 Months' },
-  { value: '1y', label: '1 Year' },
-  { value: '2y', label: '2 Years' },
-  { value: '5y', label: '5 Years' },
-  { value: '10y', label: '10 Years' },
-  { value: 'ytd', label: 'YTD' },
-  { value: 'max', label: 'Max' },
-];
+const LOAD_CHUNK_MONTHS = 6;
+const LOAD_TRIGGER_BARS = 20;
 
 export default function TvInteractiveChart() {
   const [stockData, setStockData] = useState([]);
   const [stockInfo, setStockInfo] = useState(null);
   const [realTimeData, setRealTimeData] = useState(null);
   const [symbol, setSymbol] = useState('AAPL');
-  const [period, setPeriod] = useState('6mo');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastUpdate, setLastUpdate] = useState(null);
-  const [ohlcVisible, setOhlcVisible] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [searchInput, setSearchInput] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
 
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+
+  // Chart refs
   const chartContainerRef = useRef(null);
   const chartRef = useRef(null);
   const candleSeriesRef = useRef(null);
   const volumeSeriesRef = useRef(null);
   const isVisibleRef = useRef(true);
-  const initialLoadDoneRef = useRef(false);
-  const prevDataMapRef = useRef(new Map());
 
-  // Track tab visibility
+  // Dynamic loading refs — used inside the range-change callback to avoid stale closures
+  const stockDataRef = useRef([]);
+  const oldestDateRef = useRef(null);
+  const allHistoryLoadedRef = useRef(false);
+  const isLoadingMoreRef = useRef(false);
+  const visibleRangeRef = useRef(null);
+  const initialLoadDoneRef = useRef(false);
+  const symbolRef = useRef(symbol);
+
+  // Keep refs in sync with state
+  useEffect(() => { symbolRef.current = symbol; }, [symbol]);
+
+  // Chart theme variables
+  const chartBg = isDark ? '#000000' : '#ffffff';
+  const chartText = isDark ? '#d1d5db' : '#4b5563';
+  const chartGrid = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)';
+  const crosshairLine = isDark ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.3)';
+  const labelBg = isDark ? '#1a1a2e' : '#e5e7eb';
+  const chartBorder = isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)';
+
+  // --- Debounced search ---
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      isVisibleRef.current = document.visibilityState === 'visible';
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    const trimmed = searchInput.trim();
+    if (!trimmed) { setSuggestions([]); return; }
+
+    const delayDebounceFn = setTimeout(async () => {
+      setSearchLoading(true);
+      try {
+        const res = await api.searchStocks(trimmed);
+        if (res.success && res.quotes) {
+          setSuggestions(res.quotes.filter(q => q.symbol && (q.shortname || q.longname)).slice(0, 10));
+        }
+      } catch (err) { console.error("Search failed", err); }
+      finally { setSearchLoading(false); }
+    }, 400);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchInput]);
+
+  // --- Tab visibility ---
+  useEffect(() => {
+    const handler = () => { isVisibleRef.current = document.visibilityState === 'visible'; };
+    document.addEventListener('visibilitychange', handler);
+    return () => document.removeEventListener('visibilitychange', handler);
   }, []);
 
-  // Fetch stock data - initial load only (sets loading state)
+  // --- Load more history (called from range-change callback via ref) ---
+  const loadMoreHistory = useCallback(async () => {
+    if (isLoadingMoreRef.current || allHistoryLoadedRef.current || !oldestDateRef.current) return;
+
+    isLoadingMoreRef.current = true;
+    setIsLoadingMore(true);
+
+    try {
+      const endDate = oldestDateRef.current;
+      const startObj = new Date(endDate);
+      startObj.setMonth(startObj.getMonth() - LOAD_CHUNK_MONTHS);
+      const startDate = startObj.toISOString().split('T')[0];
+
+      const data = await api.getStockDataRange(symbolRef.current, startDate, endDate);
+
+      if (data.success) {
+        if (data.historical.length === 0) {
+          allHistoryLoadedRef.current = true;
+        } else {
+          const currentData = stockDataRef.current;
+          const existingDates = new Set(currentData.map(d => d.date));
+          const newData = data.historical.filter(d => !existingDates.has(d.date));
+
+          if (newData.length === 0) {
+            allHistoryLoadedRef.current = true;
+          } else {
+            // Save the visible range so we can restore it after setData
+            visibleRangeRef.current = chartRef.current?.timeScale().getVisibleRange();
+
+            const combined = [...newData, ...currentData].sort((a, b) => a.date.localeCompare(b.date));
+            oldestDateRef.current = combined[0].date;
+            stockDataRef.current = combined;
+            setStockData(combined);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load more history', err);
+    } finally {
+      isLoadingMoreRef.current = false;
+      setIsLoadingMore(false);
+    }
+  }, []); // no deps — uses only refs
+
+  // Stable ref for the callback so subscription never goes stale
+  const loadMoreRef = useRef(loadMoreHistory);
+  useEffect(() => { loadMoreRef.current = loadMoreHistory; }, [loadMoreHistory]);
+
+  // --- Initial data fetch ---
   const fetchInitialData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       initialLoadDoneRef.current = false;
+      allHistoryLoadedRef.current = false;
 
-      const data = await api.getStockData(symbol, period);
+      const data = await api.getStockData(symbol, '6mo');
 
-      if (data.success) {
+      if (data.success && data.historical.length > 0) {
+        stockDataRef.current = data.historical;
+        oldestDateRef.current = data.historical[0].date;
         setStockData(data.historical);
         setStockInfo(data.company);
         setRealTimeData(data.real_time);
         setLastUpdate(new Date());
         initialLoadDoneRef.current = true;
-
-        // Build lookup map for incremental updates
-        const map = new Map();
-        data.historical.forEach(d => map.set(d.date, d));
-        prevDataMapRef.current = map;
       } else {
         setError(data.error || 'Failed to fetch stock data');
       }
@@ -86,186 +150,135 @@ export default function TvInteractiveChart() {
     } finally {
       setLoading(false);
     }
-  }, [symbol, period]);
+  }, [symbol]);
 
-  // Background refresh - incremental updates, no loading state, preserves chart position
+  // --- Background refresh (latest data only) ---
   const backgroundRefresh = useCallback(async () => {
     if (!initialLoadDoneRef.current) return;
     try {
-      const data = await api.getStockData(symbol, period);
-
+      const data = await api.getStockData(symbol, '5d');
       if (data.success) {
-        const prevMap = prevDataMapRef.current;
-        const newMap = new Map();
-        data.historical.forEach(d => newMap.set(d.date, d));
+        setRealTimeData(data.real_time);
+        setStockInfo(data.company);
+        setLastUpdate(new Date());
 
-        // Apply incremental updates directly to chart series
+        // Update only the tail end of chart data
         if (candleSeriesRef.current && volumeSeriesRef.current) {
           for (const d of data.historical) {
-            const prev = prevMap.get(d.date);
-            const isNew = !prev;
-            const isChanged = prev && (
-              prev.price !== d.price || prev.open !== d.open ||
-              prev.high !== d.high || prev.low !== d.low ||
-              prev.volume !== d.volume
-            );
-
-            if (isNew || isChanged) {
-              candleSeriesRef.current.update({
-                time: d.date,
-                open: d.open,
-                high: d.high,
-                low: d.low,
-                close: d.price,
-              });
-              volumeSeriesRef.current.update({
-                time: d.date,
-                value: d.volume,
-                color: d.price >= d.open ? 'rgba(0, 212, 255, 0.3)' : 'rgba(255, 68, 68, 0.3)',
-              });
-            }
+            candleSeriesRef.current.update({
+              time: d.date, open: d.open, high: d.high, low: d.low, close: d.price,
+            });
+            volumeSeriesRef.current.update({
+              time: d.date, value: d.volume,
+              color: d.price >= d.open ? 'rgba(0, 212, 255, 0.3)' : 'rgba(255, 68, 68, 0.3)',
+            });
           }
         }
-
-        prevDataMapRef.current = newMap;
-        setStockData(data.historical);
-        setStockInfo(data.company);
-        setRealTimeData(data.real_time);
-        setLastUpdate(new Date());
       }
-    } catch (err) {
-      // Silently fail on background refresh - don't disrupt UI
-    }
-  }, [symbol, period]);
+    } catch (_) { /* silently fail */ }
+  }, [symbol]);
 
-  // Initial fetch and background polling
+  // Kick off initial fetch + polling
   useEffect(() => {
     fetchInitialData();
-
     const interval = setInterval(() => {
-      if (isVisibleRef.current) {
-        backgroundRefresh();
-      }
+      if (isVisibleRef.current) backgroundRefresh();
     }, 30000);
-
     return () => clearInterval(interval);
   }, [fetchInitialData, backgroundRefresh]);
 
-  // Create chart and update data
+  // --- Theme hot-swap on existing chart ---
+  useEffect(() => {
+    if (!chartRef.current) return;
+    chartRef.current.applyOptions({
+      layout: { background: { type: ColorType.Solid, color: chartBg }, textColor: chartText },
+      grid: { vertLines: { color: chartGrid }, horzLines: { color: chartGrid } },
+      crosshair: {
+        vertLine: { color: crosshairLine, labelBackgroundColor: labelBg },
+        horzLine: { color: crosshairLine, labelBackgroundColor: labelBg },
+      },
+      rightPriceScale: { borderColor: chartBorder },
+      timeScale: { borderColor: chartBorder },
+    });
+  }, [theme, chartBg, chartText, chartGrid, crosshairLine, labelBg, chartBorder]);
+
+  // --- Create chart + set data ---
   useEffect(() => {
     if (!chartContainerRef.current || stockData.length === 0) return;
 
-    // Create chart if it doesn't exist
     if (!chartRef.current) {
       chartRef.current = createChart(chartContainerRef.current, {
         layout: {
-          background: { type: ColorType.Solid, color: '#000000' },
-          textColor: '#d1d5db',
+          background: { type: ColorType.Solid, color: chartBg },
+          textColor: chartText,
           fontFamily: 'Courier New, monospace',
           fontSize: 12,
         },
-        grid: {
-          vertLines: { color: 'rgba(255, 255, 255, 0.05)' },
-          horzLines: { color: 'rgba(255, 255, 255, 0.05)' },
-        },
+        grid: { vertLines: { color: chartGrid }, horzLines: { color: chartGrid } },
         crosshair: {
           mode: CrosshairMode.Normal,
-          vertLine: {
-            color: 'rgba(255, 255, 255, 0.3)',
-            labelBackgroundColor: '#1a1a2e',
-          },
-          horzLine: {
-            color: 'rgba(255, 255, 255, 0.3)',
-            labelBackgroundColor: '#1a1a2e',
-          },
+          vertLine: { color: crosshairLine, labelBackgroundColor: labelBg },
+          horzLine: { color: crosshairLine, labelBackgroundColor: labelBg },
         },
-        rightPriceScale: {
-          borderColor: 'rgba(255, 255, 255, 0.2)',
-          scaleMargins: {
-            top: 0.1,
-            bottom: 0.25,
-          },
-        },
-        timeScale: {
-          borderColor: 'rgba(255, 255, 255, 0.2)',
-          timeVisible: false,
-          secondsVisible: false,
-        },
-        handleScroll: {
-          vertTouchDrag: false,
-        },
+        rightPriceScale: { borderColor: chartBorder, scaleMargins: { top: 0.1, bottom: 0.25 } },
+        timeScale: { borderColor: chartBorder, timeVisible: false, secondsVisible: false },
+        handleScroll: { vertTouchDrag: false },
       });
 
-      // Add candlestick series
       candleSeriesRef.current = chartRef.current.addSeries(CandlestickSeries, {
-        upColor: '#00d4ff',
-        downColor: '#ff4444',
-        borderUpColor: '#00d4ff',
-        borderDownColor: '#ff4444',
-        wickUpColor: '#00d4ff',
-        wickDownColor: '#ff4444',
+        upColor: '#00d4ff', downColor: '#ff4444',
+        borderUpColor: '#00d4ff', borderDownColor: '#ff4444',
+        wickUpColor: '#00d4ff', wickDownColor: '#ff4444',
       });
 
-      // Add volume series
       volumeSeriesRef.current = chartRef.current.addSeries(HistogramSeries, {
-        priceFormat: {
-          type: 'volume',
-        },
-        priceScaleId: '',
+        priceFormat: { type: 'volume' }, priceScaleId: '',
       });
+      volumeSeriesRef.current.priceScale().applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
 
-      volumeSeriesRef.current.priceScale().applyOptions({
-        scaleMargins: {
-          top: 0.8,
-          bottom: 0,
-        },
+      // Subscribe: when user scrolls/zooms near the left edge, load more
+      chartRef.current.timeScale().subscribeVisibleLogicalRangeChange((logicalRange) => {
+        if (logicalRange && logicalRange.from < LOAD_TRIGGER_BARS) {
+          loadMoreRef.current?.();
+        }
       });
     }
 
-    // Map stock data to lightweight-charts format
-    const candleData = stockData.map(d => ({
-      time: d.date,
-      open: d.open,
-      high: d.high,
-      low: d.low,
-      close: d.price,
-    }));
+    const candleData = stockData
+      .map(d => ({ time: d.date, open: d.open, high: d.high, low: d.low, close: d.price }))
+      .sort((a, b) => (a.time > b.time ? 1 : -1));
 
-    const volumeData = stockData.map(d => ({
-      time: d.date,
-      value: d.volume,
-      color: d.price >= d.open ? 'rgba(0, 212, 255, 0.3)' : 'rgba(255, 68, 68, 0.3)',
-    }));
-
-    // Sort by time (required by lightweight-charts)
-    candleData.sort((a, b) => (a.time > b.time ? 1 : -1));
-    volumeData.sort((a, b) => (a.time > b.time ? 1 : -1));
+    const volumeData = stockData
+      .map(d => ({
+        time: d.date, value: d.volume,
+        color: d.price >= d.open ? 'rgba(0, 212, 255, 0.3)' : 'rgba(255, 68, 68, 0.3)',
+      }))
+      .sort((a, b) => (a.time > b.time ? 1 : -1));
 
     candleSeriesRef.current.setData(candleData);
     volumeSeriesRef.current.setData(volumeData);
 
-    // Only fit content on initial load (not on background refresh)
-    if (!initialLoadDoneRef.current) {
+    // Restore view position when prepending, or fit content on first load
+    if (visibleRangeRef.current) {
+      chartRef.current.timeScale().setVisibleRange(visibleRangeRef.current);
+      visibleRangeRef.current = null;
+    } else if (!initialLoadDoneRef.current || stockData.length <= 130) {
       chartRef.current.timeScale().fitContent();
     }
-
   }, [stockData]);
 
-  // Handle resize
+  // --- Resize handler ---
   useEffect(() => {
     const handleResize = () => {
       if (chartRef.current && chartContainerRef.current) {
-        chartRef.current.applyOptions({
-          width: chartContainerRef.current.clientWidth,
-        });
+        chartRef.current.applyOptions({ width: chartContainerRef.current.clientWidth });
       }
     };
-
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Cleanup chart on unmount
+  // --- Cleanup chart on unmount ---
   useEffect(() => {
     return () => {
       if (chartRef.current) {
@@ -277,18 +290,22 @@ export default function TvInteractiveChart() {
     };
   }, []);
 
-  // Reset chart when symbol/period changes
+  // --- Reset chart when symbol changes ---
   useEffect(() => {
     initialLoadDoneRef.current = false;
-    prevDataMapRef.current = new Map();
+    allHistoryLoadedRef.current = false;
+    oldestDateRef.current = null;
+    stockDataRef.current = [];
+    visibleRangeRef.current = null;
     if (chartRef.current) {
       chartRef.current.remove();
       chartRef.current = null;
       candleSeriesRef.current = null;
       volumeSeriesRef.current = null;
     }
-  }, [symbol, period]);
+  }, [symbol]);
 
+  // --- Helpers ---
   const formatMarketCap = (cap) => {
     if (cap >= 1e12) return `$${(cap / 1e12).toFixed(2)}T`;
     if (cap >= 1e9) return `$${(cap / 1e9).toFixed(2)}B`;
@@ -303,53 +320,14 @@ export default function TvInteractiveChart() {
     return `${vol}`;
   };
 
-  // Skeleton loader
+  // --- Render ---
   if (loading && stockData.length === 0) {
     return (
       <div style={{
-        width: '100%',
-        height: '100vh',
-        padding: '20px',
-        backgroundColor: '#000000',
-        fontFamily: 'Courier New, monospace',
-        overflow: 'hidden'
+        width: '100%', height: '100vh', padding: '20px',
+        backgroundColor: 'var(--bg-main)', fontFamily: 'Courier New, monospace', overflow: 'hidden'
       }}>
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '15px',
-          paddingBottom: '15px',
-          borderBottom: '2px solid #333'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-            <div style={{ width: '80px', height: '24px', backgroundColor: '#222', borderRadius: '4px' }} />
-            <div style={{ width: '120px', height: '16px', backgroundColor: '#222', borderRadius: '4px' }} />
-          </div>
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <div style={{ width: '150px', height: '36px', backgroundColor: '#222', borderRadius: '4px' }} />
-            <div style={{ width: '120px', height: '36px', backgroundColor: '#222', borderRadius: '4px' }} />
-            <div style={{ width: '100px', height: '36px', backgroundColor: '#222', borderRadius: '4px' }} />
-          </div>
-        </div>
-        <div style={{
-          display: 'flex',
-          gap: '30px',
-          marginBottom: '20px',
-          padding: '15px',
-          backgroundColor: '#111',
-          border: '1px solid #333'
-        }}>
-          {[1, 2, 3, 4, 5].map(i => (
-            <div key={i}>
-              <div style={{ width: '80px', height: '12px', backgroundColor: '#222', marginBottom: '8px', borderRadius: '2px' }} />
-              <div style={{ width: '100px', height: '28px', backgroundColor: '#222', borderRadius: '4px' }} />
-            </div>
-          ))}
-        </div>
-        <div style={{ height: 'calc(100% - 220px)', backgroundColor: '#111', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ color: '#444' }}>Loading candlestick data...</div>
-        </div>
+        <div style={{ color: 'var(--text-main)' }}>Loading candlestick data...</div>
       </div>
     );
   }
@@ -357,14 +335,8 @@ export default function TvInteractiveChart() {
   if (error && stockData.length === 0) {
     return (
       <div style={{
-        width: '100%',
-        height: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#000000',
-        color: '#ff4444',
-        fontFamily: 'Courier New, monospace'
+        width: '100%', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        backgroundColor: 'var(--bg-main)', color: 'var(--chart-down)', fontFamily: 'Courier New, monospace'
       }}>
         <div>Error: {error}</div>
       </div>
@@ -373,34 +345,20 @@ export default function TvInteractiveChart() {
 
   return (
     <div style={{
-      width: '100%',
-      height: '100vh',
-      padding: '20px',
-      backgroundColor: '#000000',
-      fontFamily: 'Courier New, monospace',
-      overflow: 'hidden',
-      display: 'flex',
-      flexDirection: 'column'
+      width: '100%', height: '100%', padding: '20px',
+      backgroundColor: 'var(--bg-main)', color: 'var(--text-main)',
+      fontFamily: 'Courier New, monospace', overflow: 'hidden',
+      display: 'flex', flexDirection: 'column'
     }}>
       {/* Header */}
       <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '15px',
-        paddingBottom: '15px',
-        borderBottom: '2px solid #333'
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        marginBottom: '15px', paddingBottom: '15px', borderBottom: '2px solid var(--border-main)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-          <h2 style={{ color: '#ffffff', margin: 0, fontSize: '20px' }}>
-            {stockInfo?.symbol || symbol}
-          </h2>
-          <span style={{ color: '#888', fontSize: '14px' }}>
-            {stockInfo?.name || 'Loading...'}
-          </span>
-          <span style={{ color: '#555', fontSize: '12px' }}>
-            [lightweight-charts]
-          </span>
+          <h2 style={{ margin: 0, fontSize: '20px' }}>{stockInfo?.symbol || symbol}</h2>
+          <span style={{ color: 'var(--text-muted)', fontSize: '14px' }}>{stockInfo?.name || 'Loading...'}</span>
+          <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>[lightweight-charts]</span>
         </div>
 
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
@@ -408,169 +366,146 @@ export default function TvInteractiveChart() {
             onSubmit={(e) => {
               e.preventDefault();
               const trimmed = searchInput.trim().toUpperCase();
-              if (trimmed) {
-                setSymbol(trimmed);
-                setSearchInput('');
-              }
+              if (trimmed) { setSymbol(trimmed); setSearchInput(''); setShowSuggestions(false); }
             }}
             style={{ display: 'flex', gap: '0', alignItems: 'center' }}
           >
-            <input
-              type="text"
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Search ticker..."
-              style={{
-                backgroundColor: '#000',
-                color: '#fff',
-                border: '2px solid #fff',
-                borderRight: 'none',
-                padding: '8px 12px',
-                fontFamily: 'Courier New, monospace',
-                fontSize: '14px',
-                width: '140px',
-                outline: 'none'
-              }}
-            />
-            <button
-              type="submit"
-              style={{
-                backgroundColor: '#fff',
-                color: '#000',
-                border: '2px solid #fff',
-                padding: '8px 12px',
-                fontFamily: 'Courier New, monospace',
-                fontSize: '14px',
-                fontWeight: 'bold',
-                cursor: 'pointer'
-              }}
-            >
-              Go
-            </button>
+            <div style={{ position: 'relative', display: 'flex' }}>
+              <input
+                type="text"
+                value={searchInput}
+                onChange={(e) => {
+                  setSearchInput(e.target.value);
+                  setShowSuggestions(!!e.target.value.trim());
+                }}
+                onFocus={() => { if (searchInput.trim()) setShowSuggestions(true); }}
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                placeholder="Search ticker..."
+                style={{
+                  backgroundColor: 'var(--bg-main)', color: 'var(--text-main)',
+                  border: '2px solid var(--border-focus)', borderRight: 'none',
+                  padding: '6px 10px', fontFamily: 'Courier New, monospace',
+                  fontSize: '12px', width: '200px', outline: 'none'
+                }}
+              />
+              {showSuggestions && (suggestions.length > 0 || searchLoading) && (
+                <ul style={{
+                  position: 'absolute', top: '100%', left: 0, width: '300px', maxHeight: '300px',
+                  overflowY: 'auto', backgroundColor: 'var(--bg-main)',
+                  border: '1px solid var(--border-focus)', listStyle: 'none',
+                  padding: 0, margin: 0, zIndex: 1000, boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
+                }}>
+                  {searchLoading && suggestions.length === 0 ? (
+                    <li style={{ padding: '8px 12px', color: 'var(--text-muted)', fontSize: '12px' }}>Searching market...</li>
+                  ) : (
+                    suggestions.map(s => (
+                      <li
+                        key={`${s.symbol}-${s.exchDisp}`}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => { setSymbol(s.symbol); setSearchInput(''); setShowSuggestions(false); }}
+                        style={{
+                          padding: '8px 12px', cursor: 'pointer',
+                          borderBottom: '1px solid var(--border-main)',
+                          fontFamily: 'Courier New, monospace', fontSize: '12px',
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                        }}
+                        onMouseEnter={(e) => e.target.style.backgroundColor = 'var(--bg-panel)'}
+                        onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                      >
+                        <div style={{ pointerEvents: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                          <strong style={{ color: 'var(--accent)' }}>{s.symbol}</strong>
+                          <span style={{ color: 'var(--text-muted)', marginLeft: '6px' }}>{s.shortname || s.longname}</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '4px', pointerEvents: 'none', flexShrink: 0 }}>
+                          {s.quoteType && (
+                            <span style={{ fontSize: '9px', color: 'var(--bg-main)', backgroundColor: s.quoteType === 'ETF' ? '#9333ea' : 'var(--text-muted)', padding: '2px 4px', borderRadius: '4px' }}>
+                              {s.quoteType}
+                            </span>
+                          )}
+                          {s.exchDisp && (
+                            <span style={{ fontSize: '9px', color: 'var(--bg-main)', backgroundColor: 'var(--text-muted)', padding: '2px 4px', borderRadius: '4px' }}>
+                              {s.exchDisp}
+                            </span>
+                          )}
+                        </div>
+                      </li>
+                    ))
+                  )}
+                </ul>
+              )}
+            </div>
+            <button type="submit" style={{
+              backgroundColor: 'var(--text-main)', color: 'var(--bg-main)',
+              border: '2px solid var(--border-focus)', padding: '6px 10px',
+              fontFamily: 'Courier New, monospace', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer'
+            }}>Go</button>
           </form>
-
-          <select
-            value={symbol}
-            onChange={(e) => setSymbol(e.target.value)}
-            style={{
-              backgroundColor: '#000',
-              color: '#fff',
-              border: '2px solid #fff',
-              padding: '8px 12px',
-              fontFamily: 'Courier New, monospace',
-              fontSize: '14px',
-              cursor: 'pointer'
-            }}
-          >
-            {POPULAR_STOCKS.map(stock => (
-              <option key={stock.symbol} value={stock.symbol}>
-                {stock.symbol} - {stock.name}
-              </option>
-            ))}
-          </select>
-
 
           <button
             onClick={fetchInitialData}
             disabled={loading}
             style={{
-              backgroundColor: loading ? '#666' : '#fff',
-              color: '#000',
-              border: '2px solid #fff',
-              padding: '8px 16px',
-              fontFamily: 'Courier New, monospace',
-              fontSize: '14px',
-              fontWeight: 'bold',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              textTransform: 'uppercase',
+              backgroundColor: loading ? 'var(--bg-panel)' : 'var(--text-main)',
+              color: loading ? 'var(--text-muted)' : 'var(--bg-main)',
+              border: '2px solid var(--border-focus)', padding: '6px 12px',
+              fontFamily: 'Courier New, monospace', fontSize: '12px', fontWeight: 'bold',
+              cursor: loading ? 'not-allowed' : 'pointer', textTransform: 'uppercase',
               opacity: loading ? 0.6 : 1
             }}
-          >
-            {loading ? 'Loading...' : 'Refresh'}
-          </button>
+          >{loading ? 'Loading...' : 'Refresh'}</button>
         </div>
       </div>
 
       {/* Real-Time Stats */}
       {realTimeData && (
         <div style={{
-          display: 'flex',
-          gap: '30px',
-          marginBottom: '15px',
-          padding: '12px 15px',
-          backgroundColor: '#111',
-          border: '1px solid #333'
+          display: 'flex', gap: '30px', marginBottom: '15px', padding: '12px 15px',
+          backgroundColor: 'var(--bg-panel)', border: '1px solid var(--border-main)'
         }}>
           <div>
-            <div style={{ color: '#888', fontSize: '11px', textTransform: 'uppercase' }}>Current Price</div>
-            <div style={{
-              color: realTimeData.change >= 0 ? '#44ff44' : '#ff4444',
-              fontSize: '24px',
-              fontWeight: 'bold'
-            }}>
+            <div style={{ color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase' }}>Current Price</div>
+            <div style={{ color: realTimeData.change >= 0 ? 'var(--chart-up)' : 'var(--chart-down)', fontSize: '24px', fontWeight: 'bold' }}>
               ${realTimeData.current_price.toFixed(2)}
             </div>
-            <div style={{
-              color: realTimeData.change >= 0 ? '#44ff44' : '#ff4444',
-              fontSize: '13px'
-            }}>
+            <div style={{ color: realTimeData.change >= 0 ? 'var(--chart-up)' : 'var(--chart-down)', fontSize: '13px' }}>
               {realTimeData.change >= 0 ? '+' : ''}{realTimeData.change.toFixed(2)} ({realTimeData.change_percent.toFixed(2)}%)
             </div>
           </div>
-
           <div>
-            <div style={{ color: '#888', fontSize: '11px', textTransform: 'uppercase' }}>Day Range</div>
-            <div style={{ color: '#fff', fontSize: '14px' }}>
-              ${realTimeData.day_low} - ${realTimeData.day_high}
-            </div>
+            <div style={{ color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase' }}>Day Range</div>
+            <div style={{ fontSize: '14px' }}>${realTimeData.day_low} - ${realTimeData.day_high}</div>
           </div>
-
           <div>
-            <div style={{ color: '#888', fontSize: '11px', textTransform: 'uppercase' }}>Volume</div>
-            <div style={{ color: '#fff', fontSize: '14px' }}>
-              {formatVolume(realTimeData.volume)}
-            </div>
+            <div style={{ color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase' }}>Volume</div>
+            <div style={{ fontSize: '14px' }}>{formatVolume(realTimeData.volume)}</div>
           </div>
-
           {stockInfo?.market_cap > 0 && (
             <div>
-              <div style={{ color: '#888', fontSize: '11px', textTransform: 'uppercase' }}>Market Cap</div>
-              <div style={{ color: '#fff', fontSize: '14px' }}>
-                {formatMarketCap(stockInfo.market_cap)}
-              </div>
+              <div style={{ color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase' }}>Market Cap</div>
+              <div style={{ fontSize: '14px' }}>{formatMarketCap(stockInfo.market_cap)}</div>
             </div>
           )}
-
           {stockInfo?.pe_ratio && stockInfo.pe_ratio !== 'N/A' && (
             <div>
-              <div style={{ color: '#888', fontSize: '11px', textTransform: 'uppercase' }}>P/E Ratio</div>
-              <div style={{ color: '#fff', fontSize: '14px' }}>
-                {stockInfo.pe_ratio.toFixed(2)}
-              </div>
+              <div style={{ color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase' }}>P/E Ratio</div>
+              <div style={{ fontSize: '14px' }}>{stockInfo.pe_ratio.toFixed(2)}</div>
             </div>
           )}
-
           <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
-            <div style={{ color: '#888', fontSize: '11px', textTransform: 'uppercase' }}>Last Updated</div>
-            <div style={{ color: '#fff', fontSize: '12px' }}>
-              {lastUpdate?.toLocaleTimeString() || 'N/A'}
-            </div>
-            {loading && <div style={{ color: '#00d4ff', fontSize: '11px' }}>Updating...</div>}
+            <div style={{ color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase' }}>Last Updated</div>
+            <div style={{ fontSize: '12px' }}>{lastUpdate?.toLocaleTimeString() || 'N/A'}</div>
+            {loading && <div style={{ color: 'var(--accent)', fontSize: '11px' }}>Updating...</div>}
           </div>
         </div>
       )}
 
-      {/* Legend */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '10px'
-      }}>
-        <div style={{ color: '#888', fontSize: '13px' }}>
-          Candlestick chart with volume overlay - drag to pan, scroll to zoom
+      {/* Chart info bar */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+        <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
+          Scroll left or zoom out to load more history
+          {isLoadingMore && <span style={{ color: 'var(--accent)', marginLeft: '12px' }}>⟳ Loading older data...</span>}
         </div>
-        <div style={{ display: 'flex', gap: '20px', color: '#ffffff', fontSize: '13px' }}>
+        <div style={{ display: 'flex', gap: '20px', fontSize: '13px' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
             <span style={{ width: '14px', height: '14px', backgroundColor: '#00d4ff', borderRadius: '2px' }}></span>
             Bullish
@@ -586,51 +521,10 @@ export default function TvInteractiveChart() {
       <div
         ref={chartContainerRef}
         style={{
-          flex: 1,
-          minHeight: 0,
-          backgroundColor: '#000000',
-          border: '1px solid #333',
-          marginBottom: '10px'
+          flex: 1, minHeight: 0,
+          backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-main)'
         }}
       />
-
-      {/* Period Selector (Robinhood Style) */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: '5px 0',
-      }}>
-        {PERIODS.map(p => {
-          const isActive = period === p.value;
-          const shortLabel = p.label
-            .replace(/Days?/i, 'D')
-            .replace(/Months?/i, 'M')
-            .replace(/Years?/i, 'Y')
-            .replace(/\s+/g, '');
-
-          return (
-            <button
-              key={p.value}
-              onClick={() => setPeriod(p.value)}
-              style={{
-                backgroundColor: 'transparent',
-                color: isActive ? '#00d4ff' : '#888',
-                border: 'none',
-                borderBottom: isActive ? '2px solid #00d4ff' : '2px solid transparent',
-                padding: '8px 10px',
-                fontFamily: 'Courier New, monospace',
-                fontSize: '14px',
-                fontWeight: isActive ? 'bold' : 'normal',
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-              }}
-            >
-              {shortLabel.toUpperCase()}
-            </button>
-          );
-        })}
-      </div>
     </div>
   );
 }

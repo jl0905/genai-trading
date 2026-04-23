@@ -8,8 +8,8 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "server": "uvicorn backend.main:app --port 3001",
-    "server:dev": "uvicorn backend.main:app --reload --port 3001",
+    "server": "uvicorn backend.main:app --port 3000",
+    "server:dev": "uvicorn backend.main:app --reload --port 3000",
     "start": "concurrently \"npm run server:dev\" \"npm run dev\""
   },
   "dependencies": {
@@ -17,9 +17,6 @@
     "chart.js": "^4.5.1",
     "chartjs-chart-financial": "^0.2.1",
     "chartjs-plugin-annotation": "^3.1.0",
-    "cors": "^2.8.6",
-    "dotenv": "^17.4.0",
-    "express": "^5.2.1",
     "lightweight-charts": "^5.1.0",
     "react": "^19.2.4",
     "react-chartjs-2": "^5.3.1",

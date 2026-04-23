@@ -1,6 +1,18 @@
-const API_BASE_URL = 'http://localhost:3001/api';
+const API_BASE_URL = 'http://localhost:3000/api';
 
 export const api = {
+  // Authentication
+  login: async (username, password) => {
+    const response = await fetch(`${API_BASE_URL}/auth`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ username, password }),
+    });
+    return response.json();
+  },
+
   // Health check
   health: async () => {
     const response = await fetch(`${API_BASE_URL}/health`);
@@ -33,6 +45,19 @@ export const api = {
 
   getMultipleStocks: async () => {
     const response = await fetch(`${API_BASE_URL}/stocks/multi`);
+    return response.json();
+  },
+
+  // Stock data by date range (for dynamic chart loading)
+  getStockDataRange: async (symbol, start, end) => {
+    const params = new URLSearchParams({ symbol, start, end });
+    const response = await fetch(`${API_BASE_URL}/stock/range?${params}`);
+    return response.json();
+  },
+
+  // Search stocks via Yahoo Finance API proxy
+  searchStocks: async (query) => {
+    const response = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(query)}`);
     return response.json();
   },
 };
