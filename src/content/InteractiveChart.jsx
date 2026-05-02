@@ -128,6 +128,10 @@ export default function InteractiveChart() {
   const tooltipBg = isDark ? 'rgba(0, 0, 0, 0.8)' : 'rgba(255, 255, 255, 0.9)';
   const tooltipColor = isDark ? '#ffffff' : '#000000';
   const textColor = isDark ? '#ffffff' : '#000000';
+  const themePrimary = getComputedStyle(document.documentElement).getPropertyValue('--theme-primary').trim() || '#8BA97F';
+  const themePrimaryRgb = getComputedStyle(document.documentElement).getPropertyValue('--theme-primary-rgb').trim() || '139, 169, 127';
+  const themeSecondary = getComputedStyle(document.documentElement).getPropertyValue('--theme-secondary').trim() || '#FF5A5A';
+  const themeSecondaryRgb = getComputedStyle(document.documentElement).getPropertyValue('--theme-secondary-rgb').trim() || '255, 90, 90';
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -187,13 +191,13 @@ export default function InteractiveChart() {
             c: d.price
           })),
           borderColors: {
-            up: '#44ff44',
-            down: '#ff4444',
+            up: themePrimary,
+            down: themeSecondary,
             unchanged: '#888888'
           },
           backgroundColors: {
-            up: 'rgba(68, 255, 68, 0.5)',
-            down: 'rgba(255, 68, 68, 0.5)',
+            up: `rgba(${themePrimaryRgb}, 0.5)`,
+            down: `rgba(${themeSecondaryRgb}, 0.5)`,
             unchanged: 'rgba(136, 136, 136, 0.5)'
           }
         }]
@@ -209,8 +213,8 @@ export default function InteractiveChart() {
         {
           label: 'Price',
           data: prices,
-          borderColor: '#00d4ff',
-          backgroundColor: 'rgba(0, 212, 255, 0.1)',
+          borderColor: themePrimary,
+          backgroundColor: `rgba(${themePrimaryRgb}, 0.1)`,
           borderWidth: 2,
           fill: true,
           tension: 0.4,
@@ -277,8 +281,8 @@ export default function InteractiveChart() {
         },
         annotation: {
           annotations: keyPoints.reduce((acc, point, idx) => {
-            const color = point.type === 'peak' ? '#ff4444' : 
-                          point.type === 'trough' ? '#44ff44' : '#ffaa00';
+            const color = point.type === 'peak' ? themeSecondary : 
+                          point.type === 'trough' ? themePrimary : '#ffaa00';
             
             acc[`point${idx}`] = {
               type: 'point',
@@ -624,11 +628,11 @@ export default function InteractiveChart() {
         </div>
         <div style={{ display: 'flex', gap: '20px', color: 'var(--text-main)' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-            <span style={{ width: '10px', height: '10px', backgroundColor: '#ff4444', borderRadius: '50%' }}></span>
+            <span style={{ width: '10px', height: '10px', backgroundColor: 'var(--theme-secondary)', borderRadius: '50%' }}></span>
             Peak
           </span>
           <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-            <span style={{ width: '10px', height: '10px', backgroundColor: '#44ff44', borderRadius: '50%' }}></span>
+            <span style={{ width: '10px', height: '10px', backgroundColor: 'var(--theme-primary)', borderRadius: '50%' }}></span>
             Trough
           </span>
           <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
