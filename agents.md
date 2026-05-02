@@ -27,7 +27,7 @@ A React-based financial dashboard with real-time stock charts and technical anal
 - `.env`: Environment variables (not committed) — holds `OPENROUTER_API_KEY`.
 
 ## Essential Commands & Endpoints
-- **Start App**: `npm run start` (Runs both frontend and backend concurrently). *Note: Because the backend is a Python script, you must close the server and re-run `npm start` to apply changes if you want to test with the browser.*
+- **Start App**: `npm run start` (Runs both frontend and backend concurrently). *Note: Because the backend is a Python script, you must stop both the server and the frontend and re-run `npm start` to apply changes if you want to test with the browser.*
 - **Backend APIs** (localhost:3000): 
   - `GET /api/stock?symbol=AAPL&period=6mo`
   - `GET /api/stock/range?symbol=AAPL&start=2024-01-01&end=2024-07-01` — Date-range fetch for dynamic chart loading
@@ -45,3 +45,8 @@ A React-based financial dashboard with real-time stock charts and technical anal
 - Frontend: Port 5173 | Backend: Port 3000.
 - Windows environment - use PowerShell or CMD.
 - API endpoints return native Python dictionaries serialized by FastAPI.
+
+## Theming & Styling
+- The app uses a centralized primary color variable `var(--theme-primary)` (default: `#8BA97F` / Sage Green) for all accent colors, bullish candle wicks, volume bars, AI analysis borders, and price numbers.
+- The app uses a centralized secondary color variable `var(--theme-secondary)` (default: `#FF5A5A` / Red) for all bearish elements, downward candle wicks, and negative price numbers.
+- If you need to tweak these colors, modify `--theme-primary` / `--theme-secondary` and their RGB counterparts in `src/index.css`. JS components automatically read these variables using `getComputedStyle`.

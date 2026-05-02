@@ -56,6 +56,10 @@ export default function TvInteractiveChart() {
   const crosshairLine = isDark ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.3)';
   const labelBg = isDark ? '#1a1a2e' : '#e5e7eb';
   const chartBorder = isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)';
+  const themePrimary = getComputedStyle(document.documentElement).getPropertyValue('--theme-primary').trim() || '#8BA97F';
+  const themePrimaryRgb = getComputedStyle(document.documentElement).getPropertyValue('--theme-primary-rgb').trim() || '139, 169, 127';
+  const themeSecondary = getComputedStyle(document.documentElement).getPropertyValue('--theme-secondary').trim() || '#FF5A5A';
+  const themeSecondaryRgb = getComputedStyle(document.documentElement).getPropertyValue('--theme-secondary-rgb').trim() || '255, 90, 90';
 
   // --- Debounced search ---
   useEffect(() => {
@@ -177,7 +181,7 @@ export default function TvInteractiveChart() {
             });
             volumeSeriesRef.current.update({
               time: d.date, value: d.volume,
-              color: d.price >= d.open ? 'rgba(0, 212, 255, 0.3)' : 'rgba(255, 68, 68, 0.3)',
+              color: d.price >= d.open ? `rgba(${themePrimaryRgb}, 0.3)` : `rgba(${themeSecondaryRgb}, 0.3)`,
             });
           }
         }
@@ -233,9 +237,9 @@ export default function TvInteractiveChart() {
       });
 
       candleSeriesRef.current = chartRef.current.addSeries(CandlestickSeries, {
-        upColor: '#00d4ff', downColor: '#ff4444',
-        borderUpColor: '#00d4ff', borderDownColor: '#ff4444',
-        wickUpColor: '#00d4ff', wickDownColor: '#ff4444',
+        upColor: themePrimary, downColor: themeSecondary,
+        borderUpColor: themePrimary, borderDownColor: themeSecondary,
+        wickUpColor: themePrimary, wickDownColor: themeSecondary,
       });
 
       volumeSeriesRef.current = chartRef.current.addSeries(HistogramSeries, {
@@ -258,7 +262,7 @@ export default function TvInteractiveChart() {
     const volumeData = stockData
       .map(d => ({
         time: d.date, value: d.volume,
-        color: d.price >= d.open ? 'rgba(0, 212, 255, 0.3)' : 'rgba(255, 68, 68, 0.3)',
+        color: d.price >= d.open ? `rgba(${themePrimaryRgb}, 0.3)` : `rgba(${themeSecondaryRgb}, 0.3)`,
       }))
       .sort((a, b) => (a.time > b.time ? 1 : -1));
 
@@ -509,7 +513,7 @@ export default function TvInteractiveChart() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
           <h2 style={{ margin: 0, fontSize: '20px' }}>{stockInfo?.symbol || symbol}</h2>
           <span style={{ color: 'var(--text-muted)', fontSize: '14px' }}>{stockInfo?.name || 'Loading...'}</span>
-          <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>[lightweight-charts]</span>
+
         </div>
 
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
@@ -642,60 +646,58 @@ export default function TvInteractiveChart() {
               <div style={{ fontSize: '14px' }}>{stockInfo.pe_ratio.toFixed(2)}</div>
             </div>
           )}
-          <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
-            <div style={{ color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase' }}>Last Updated</div>
-            <div style={{ fontSize: '12px' }}>{lastUpdate?.toLocaleTimeString() || 'N/A'}</div>
-            {loading && <div style={{ color: 'var(--accent)', fontSize: '11px' }}>Updating...</div>}
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '20px' }}>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase' }}>Last Updated</div>
+              <div style={{ fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
+                {lastUpdate?.toLocaleTimeString() || 'N/A'}
+                {isLoadingMore && <span style={{ color: 'var(--theme-primary)', fontSize: '11px' }} title="Loading older data...">⟳</span>}
+              </div>
+              {loading && <div style={{ color: 'var(--theme-primary)', fontSize: '11px' }}>Updating...</div>}
+            </div>
+            
+            <button
+              onClick={analyzeVisibleRange}
+              disabled={analysisLoading}
+              style={{
+                backgroundColor: analysisLoading ? 'var(--bg-panel)' : 'var(--text-main)',
+                color: analysisLoading ? 'var(--text-muted)' : 'var(--bg-main)',
+                border: '2px solid var(--border-focus)',
+                padding: '8px 14px',
+                fontFamily: 'Courier New, monospace',
+                fontSize: '12px',
+                fontWeight: 'bold',
+                cursor: analysisLoading ? 'not-allowed' : 'pointer',
+                textTransform: 'uppercase',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                opacity: analysisLoading ? 0.6 : 1,
+                transition: 'all 0.2s ease'
+              }}
+            >
+              {analysisLoading ? (
+                <>
+                  <span style={{
+                    display: 'inline-block', width: '12px', height: '12px',
+                    border: '2px solid var(--text-muted)', borderTopColor: 'transparent',
+                    borderRadius: '50%',
+                    animation: 'ai-spin 0.8s linear infinite',
+                  }} />
+                  Analyzing…
+                </>
+              ) : (
+                <>
+                  <span style={{ fontSize: '14px' }}>✦</span>
+                  AI Analyze
+                </>
+              )}
+            </button>
           </div>
         </div>
       )}
 
-      {/* Chart info bar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
-            Scroll left or zoom out to load more history
-            {isLoadingMore && <span style={{ color: 'var(--accent)', marginLeft: '12px' }}>⟳ Loading older data...</span>}
-          </div>
-          <button
-            onClick={analyzeVisibleRange}
-            disabled={analysisLoading}
-            style={{
-              backgroundColor: analysisLoading ? 'var(--bg-panel)' : 'var(--text-main)',
-              color: analysisLoading ? 'var(--text-muted)' : 'var(--bg-main)',
-              border: '2px solid var(--border-focus)',
-              padding: '6px 14px',
-              fontFamily: 'Courier New, monospace',
-              fontSize: '12px',
-              fontWeight: 'bold',
-              cursor: analysisLoading ? 'not-allowed' : 'pointer',
-              textTransform: 'uppercase',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              opacity: analysisLoading ? 0.6 : 1,
-              transition: 'all 0.2s ease'
-            }}
-          >
-            {analysisLoading ? (
-              <>
-                <span style={{
-                  display: 'inline-block', width: '12px', height: '12px',
-                  border: '2px solid var(--text-muted)', borderTopColor: 'transparent',
-                  borderRadius: '50%',
-                  animation: 'ai-spin 0.8s linear infinite',
-                }} />
-                Analyzing…
-              </>
-            ) : (
-              <>
-                <span style={{ fontSize: '14px' }}>✦</span>
-                AI Analyze
-              </>
-            )}
-          </button>
-        </div>
-      </div>
+
 
       {/* Chart + Analysis Row */}
       <div ref={chartRowRef} style={{
@@ -727,7 +729,7 @@ export default function TvInteractiveChart() {
             marginLeft: '10px',
             backgroundColor: 'var(--bg-panel)',
             border: '1px solid var(--border-main)',
-            borderLeft: '3px solid #8b5cf6',
+            borderLeft: '3px solid var(--theme-primary)',
             borderRadius: '4px',
             overflow: 'hidden',
             display: 'flex',
@@ -790,7 +792,7 @@ export default function TvInteractiveChart() {
                   <div style={{
                     width: '28px', height: '28px',
                     border: '3px solid var(--border-main)',
-                    borderTopColor: '#8b5cf6',
+                    borderTopColor: 'var(--theme-primary)',
                     borderRadius: '50%',
                     animation: 'ai-spin 0.8s linear infinite',
                   }} />

@@ -48,12 +48,12 @@ def _build_prompt(symbol: str, company_name: str, sector: str,
         "You are an expert financial technical analyst. The user will give you "
         "a snapshot of OHLCV candlestick data for a stock. Provide a clear, "
         "detailed analysis that covers:\n"
-        "1. Overall trend direction and strength\n"
-        "2. Key support and resistance levels observed in the data\n"
-        "3. Notable candlestick patterns (e.g. doji, engulfing, hammer)\n"
-        "4. Volume analysis — any spikes or divergences\n"
-        "5. Possible catalysts or market context if the company/sector is well-known\n"
-        "6. A brief forward-looking outlook based solely on the technical picture\n\n"
+        "- Overall trend direction and strength\n"
+        "- Key support and resistance levels observed in the data\n"
+        #"3. Notable candlestick patterns (e.g. doji, engulfing, hammer)\n"
+        "- Volume analysis — any spikes or divergences\n"
+        "- Possible catalysts or market context if the company/sector is well-known\n"
+        "- A brief forward-looking outlook based solely on the technical picture\n\n"
         "Write in a professional but accessible tone. Use bullet points and "
         "short paragraphs. Do NOT provide financial advice or specific buy/sell "
         "recommendations — frame everything as observational analysis."
@@ -110,61 +110,66 @@ def analyze_chart(symbol: str, company_name: str, sector: str,
     )
 
     # --- Call OpenRouter REST API ---
-    url = "https://openrouter.ai/api/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": "http://localhost:3000",
-        "X-Title": "GenAI Trading Dashboard"
-    }
-    
-    payload = {
-        "model": "tencent/hy3-preview:free",
-        "messages": [
-            {"role": "user", "content": f"{system_prompt}\n\n{user_prompt}"}
-        ],
-        "temperature": 0.7,
-        "max_tokens": 2048,
-    }
+    try:
+        from openai import OpenAI
+        import openai
+    except ImportError:
+        return {"success": False, "error": "The 'openai' python package is not installed. Please run 'pip install openai'."}
 
     try:
-        resp = requests.post(url, headers=headers, json=payload, timeout=30)
-        resp.raise_for_status()
-        body = resp.json()
+        client = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=api_key,
+        )
 
-        # Extract generated text from OpenRouter response
-        choices = body.get("choices", [])
-        if not choices:
-            if "error" in body:
-                err_msg = body["error"].get("message", str(body["error"])) if isinstance(body["error"], dict) else str(body["error"])
-                return {"success": False, "error": f"OpenRouter API error: {err_msg}"}
+        response = client.chat.completions.create(
+            model="tencent/hy3-preview:free",
+            messages=[
+                {"role": "user", "content": f"{system_prompt}\n\n{user_prompt}"}
+            ],
+            temperature=0.7,
+            extra_headers={
+                "HTTP-Referer": "http://localhost:3000",
+                "X-Title": "GenAI Trading Dashboard"
+            },
+            extra_body={"reasoning": {"enabled": True}}
+        )
+
+        if not response.choices:
             return {"success": False, "error": "No response from OpenRouter API."}
 
-        message = choices[0].get("message", {})
-        content = message.get("content")
+        message = response.choices[0].message
+        content = message.content
         
         if not content:
-            refusal = message.get("refusal")
-            if refusal:
-                return {"success": False, "error": f"Model refused: {refusal}"}
+            if hasattr(message, 'refusal') and message.refusal:
+                return {"success": False, "error": f"Model refused: {message.refusal}"}
             return {"success": False, "error": "Model returned an empty response."}
 
+        # Add reasoning output if the model provided it
         text = content.strip()
+        reasoning_text = None
+        
+        # Depending on how the openai SDK maps OpenRouter's extra fields
+        if hasattr(message, 'reasoning_details'):
+            reasoning_text = message.reasoning_details
+        elif hasattr(message, 'reasoning'):
+            reasoning_text = message.reasoning
+        elif hasattr(message, 'model_extra') and message.model_extra:
+            reasoning_text = message.model_extra.get('reasoning')
 
         return {
             "success": True,
             "analysis": text,
             "metrics": metrics,
+            "reasoning": reasoning_text,
         }
 
-    except requests.exceptions.Timeout:
-        return {"success": False, "error": "OpenRouter API request timed out."}
-    except requests.exceptions.HTTPError as e:
-        error_detail = ""
-        try:
-            error_detail = e.response.json().get("error", {}).get("message", str(e))
-        except Exception:
-            error_detail = str(e)
-        return {"success": False, "error": f"OpenRouter API error: {error_detail}"}
+    except openai.APIConnectionError as e:
+        return {"success": False, "error": "Failed to connect to OpenRouter API."}
+    except openai.RateLimitError as e:
+        return {"success": False, "error": "OpenRouter API rate limit exceeded."}
+    except openai.APIError as e:
+        return {"success": False, "error": f"OpenRouter API error: {str(e)}"}
     except Exception as e:
         return {"success": False, "error": f"Unexpected error: {str(e)}"}

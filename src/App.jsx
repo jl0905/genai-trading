@@ -15,7 +15,7 @@ const tabComponents = {
 // Tab configuration - easy to modify and extend
 const initialTabs = [
   { id: 'entryVisual', name: '3D Donut', component: tabComponents.entryVisual },
-  { id: 'tvInteractiveChart', name: 'TV Chart', component: tabComponents.tvInteractiveChart },
+  { id: 'tvInteractiveChart', name: 'Charts', component: tabComponents.tvInteractiveChart },
   { id: 'reader', name: 'Reader', component: tabComponents.reader },
 ]
 

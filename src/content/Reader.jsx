@@ -65,8 +65,8 @@ const generateEducationalContent = () => {
           <li><strong>Close:</strong> The final price at the end of the day.</li>
         </ul>
         <h3>Color Indicators:</h3>
-        <p><strong><span style="color: #00d4ff;">Cyan/Blue Candles:</span></strong> The close price was higher than the open price (bullish day). The stock gained value.</p>
-        <p><strong><span style="color: #ff4444;">Red Candles:</span></strong> The close price was lower than the open price (bearish day). The stock lost value.</p>
+        <p><strong><span style="color: var(--theme-primary);">Bullish Candles:</span></strong> The close price was higher than the open price. The stock gained value.</p>
+        <p><strong><span style="color: var(--chart-down);">Bearish Candles:</span></strong> The close price was lower than the open price. The stock lost value.</p>
         <p>Our AI model is specifically trained to recognize candlestick patterns like Dojis, Hammers, and Engulfing patterns when you request an analysis.</p>
       `
     },

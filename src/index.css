@@ -1,6 +1,11 @@
 @import "tailwindcss";
 
 :root {
+  --theme-primary: #8BA97F;
+  --theme-primary-rgb: 139, 169, 127;
+  --theme-secondary: #FF5A5A;
+  --theme-secondary-rgb: 255, 90, 90;
+  
   --bg-main: #ffffff;
   --bg-panel: #f3f4f6;
   --bg-input: #ffffff;
@@ -8,9 +13,9 @@
   --text-muted: #6b7280;
   --border-main: #d1d5db;
   --border-focus: #000000;
-  --accent: #2563eb;
-  --chart-up: #22c55e;
-  --chart-down: #ef4444;
+  --accent: var(--theme-primary);
+  --chart-up: var(--theme-primary);
+  --chart-down: var(--theme-secondary);
   --chart-grid: rgba(0, 0, 0, 0.1);
   --btn-bg: #e5e7eb;
   --btn-text: #000000;
@@ -25,9 +30,9 @@
   --text-muted: #888888;
   --border-main: #333333;
   --border-focus: #ffffff;
-  --accent: #00d4ff;
-  --chart-up: #44ff44;
-  --chart-down: #ff4444;
+  --accent: var(--theme-primary);
+  --chart-up: var(--theme-primary);
+  --chart-down: var(--theme-secondary);
   --chart-grid: rgba(255, 255, 255, 0.1);
   --btn-bg: #222222;
   --btn-text: #ffffff;
