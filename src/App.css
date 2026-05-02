@@ -68,4 +68,6 @@ body {
   align-items: center;
   background-color: var(--bg-main);
   transition: background-color 0.3s ease;
+  min-height: 0;
+  width: 100%;
 }

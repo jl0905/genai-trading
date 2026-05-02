@@ -20,6 +20,13 @@ export default function TvInteractiveChart() {
   const [suggestions, setSuggestions] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
 
+  // AI analysis state
+  const [analysisText, setAnalysisText] = useState('');
+  const [analysisMetrics, setAnalysisMetrics] = useState(null);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysisError, setAnalysisError] = useState(null);
+  const [showAnalysis, setShowAnalysis] = useState(false);
+
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
@@ -267,15 +274,28 @@ export default function TvInteractiveChart() {
     }
   }, [stockData]);
 
-  // --- Resize handler ---
+  // --- Resize handler (uses ResizeObserver to react to container width changes) ---
+  const chartRowRef = useRef(null);
   useEffect(() => {
-    const handleResize = () => {
+    const syncChartWidth = () => {
       if (chartRef.current && chartContainerRef.current) {
         chartRef.current.applyOptions({ width: chartContainerRef.current.clientWidth });
       }
     };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+
+    // ResizeObserver catches both window resizes AND layout shifts (e.g. analysis panel toggling)
+    let ro;
+    if (chartContainerRef.current) {
+      ro = new ResizeObserver(syncChartWidth);
+      ro.observe(chartContainerRef.current);
+    }
+
+    // Fallback for older browsers
+    window.addEventListener('resize', syncChartWidth);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener('resize', syncChartWidth);
+    };
   }, []);
 
   // --- Cleanup chart on unmount ---
@@ -297,6 +317,14 @@ export default function TvInteractiveChart() {
     oldestDateRef.current = null;
     stockDataRef.current = [];
     visibleRangeRef.current = null;
+
+    // Reset AI analysis state so stale results / stuck loading don't persist
+    setShowAnalysis(false);
+    setAnalysisText('');
+    setAnalysisMetrics(null);
+    setAnalysisLoading(false);
+    setAnalysisError(null);
+
     if (chartRef.current) {
       chartRef.current.remove();
       chartRef.current = null;
@@ -318,6 +346,118 @@ export default function TvInteractiveChart() {
     if (vol >= 1e6) return `${(vol / 1e6).toFixed(2)}M`;
     if (vol >= 1e3) return `${(vol / 1e3).toFixed(2)}K`;
     return `${vol}`;
+  };
+
+  // --- AI Analysis ---
+  const analyzeVisibleRange = useCallback(async () => {
+    if (analysisLoading) return; // prevent duplicate requests while in-flight
+
+    if (!chartRef.current) {
+      setAnalysisError('Chart is still loading. Please wait a moment and try again.');
+      setShowAnalysis(true);
+      return;
+    }
+
+    const timeScale = chartRef.current.timeScale();
+    const visibleRange = timeScale.getVisibleRange();
+
+    if (!visibleRange) {
+      setAnalysisError('No visible range detected. Make sure the chart is loaded.');
+      setShowAnalysis(true);
+      return;
+    }
+
+    // lightweight-charts uses ISO date strings ('YYYY-MM-DD') as time values
+    const fromStr = typeof visibleRange.from === 'string'
+      ? visibleRange.from
+      : new Date(visibleRange.from * 1000).toISOString().split('T')[0];
+    const toStr = typeof visibleRange.to === 'string'
+      ? visibleRange.to
+      : new Date(visibleRange.to * 1000).toISOString().split('T')[0];
+
+    // Filter data to the visible window
+    const visibleData = stockDataRef.current.filter(
+      d => d.date >= fromStr && d.date <= toStr
+    );
+
+    if (visibleData.length < 2) {
+      setAnalysisError('Zoom in to at least 2 bars for a meaningful analysis.');
+      setShowAnalysis(true);
+      return;
+    }
+
+    setAnalysisLoading(true);
+    setAnalysisError(null);
+    setAnalysisText('');
+    setAnalysisMetrics(null);
+    setShowAnalysis(true);
+
+    try {
+      const result = await api.analyzeChart({
+        symbol: symbolRef.current,
+        company_name: stockInfo?.name || symbolRef.current,
+        sector: stockInfo?.sector || 'Unknown',
+        data: visibleData,
+      });
+
+      if (result.success) {
+        setAnalysisText(result.analysis);
+        setAnalysisMetrics(result.metrics);
+      } else {
+        setAnalysisError(result.error || 'Analysis failed.');
+      }
+    } catch (err) {
+      setAnalysisError(err.message || 'Failed to connect to analysis service.');
+    } finally {
+      setAnalysisLoading(false);
+    }
+  }, [analysisLoading, stockInfo]);
+
+  // Simple markdown-ish renderer: bold, bullets, headings
+  const renderAnalysisText = (text) => {
+    if (!text) return null;
+    const lines = text.split('\n');
+    return lines.map((line, i) => {
+      // Heading
+      const headingMatch = line.match(/^(#{1,3})\s+(.*)/);
+      if (headingMatch) {
+        const level = headingMatch[1].length;
+        const content = headingMatch[2];
+        const fontSize = level === 1 ? '16px' : level === 2 ? '14px' : '13px';
+        return (
+          <div key={i} style={{
+            fontSize, fontWeight: 'bold', marginTop: i === 0 ? 0 : '14px',
+            marginBottom: '6px', color: 'var(--accent)',
+          }}>{content}</div>
+        );
+      }
+      // Bullet
+      if (line.match(/^\s*[-*•]\s+/)) {
+        const content = line.replace(/^\s*[-*•]\s+/, '');
+        return (
+          <div key={i} style={{ paddingLeft: '16px', marginBottom: '4px', lineHeight: '1.6' }}>
+            <span style={{ color: 'var(--accent)', marginRight: '8px' }}>▸</span>
+            <span dangerouslySetInnerHTML={{
+              __html: content
+                .replace(/\*\*(.+?)\*\*/g, '<strong style="color:var(--text-main)">$1</strong>')
+                .replace(/\*(.+?)\*/g, '<em>$1</em>')
+            }} />
+          </div>
+        );
+      }
+      // Empty line
+      if (!line.trim()) return <div key={i} style={{ height: '8px' }} />;
+      // Normal paragraph
+      return (
+        <div key={i} style={{ marginBottom: '6px', lineHeight: '1.6' }}>
+          <span dangerouslySetInnerHTML={{
+            __html: line
+              .replace(/\*\*(.+?)\*\*/g, '<strong style="color:var(--text-main)">$1</strong>')
+              .replace(/\*(.+?)\*/g, '<em>$1</em>')
+          }} />
+        </div>
+      );
+    });
   };
 
   // --- Render ---
@@ -347,7 +487,7 @@ export default function TvInteractiveChart() {
     <div style={{
       width: '100%', height: '100%', padding: '20px',
       backgroundColor: 'var(--bg-main)', color: 'var(--text-main)',
-      fontFamily: 'Courier New, monospace', overflow: 'hidden',
+      fontFamily: 'Courier New, monospace', overflowY: 'auto', overflowX: 'hidden',
       display: 'flex', flexDirection: 'column'
     }}>
       {/* Header */}
@@ -501,30 +641,179 @@ export default function TvInteractiveChart() {
 
       {/* Chart info bar */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-        <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
-          Scroll left or zoom out to load more history
-          {isLoadingMore && <span style={{ color: 'var(--accent)', marginLeft: '12px' }}>⟳ Loading older data...</span>}
-        </div>
-        <div style={{ display: 'flex', gap: '20px', fontSize: '13px' }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-            <span style={{ width: '14px', height: '14px', backgroundColor: '#00d4ff', borderRadius: '2px' }}></span>
-            Bullish
-          </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-            <span style={{ width: '14px', height: '14px', backgroundColor: '#ff4444', borderRadius: '2px' }}></span>
-            Bearish
-          </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
+            Scroll left or zoom out to load more history
+            {isLoadingMore && <span style={{ color: 'var(--accent)', marginLeft: '12px' }}>⟳ Loading older data...</span>}
+          </div>
+          <button
+            onClick={analyzeVisibleRange}
+            disabled={analysisLoading}
+            style={{
+              backgroundColor: analysisLoading ? 'var(--bg-panel)' : 'var(--text-main)',
+              color: analysisLoading ? 'var(--text-muted)' : 'var(--bg-main)',
+              border: '2px solid var(--border-focus)',
+              padding: '6px 14px',
+              fontFamily: 'Courier New, monospace',
+              fontSize: '12px',
+              fontWeight: 'bold',
+              cursor: analysisLoading ? 'not-allowed' : 'pointer',
+              textTransform: 'uppercase',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              opacity: analysisLoading ? 0.6 : 1,
+              transition: 'all 0.2s ease'
+            }}
+          >
+            {analysisLoading ? (
+              <>
+                <span style={{
+                  display: 'inline-block', width: '12px', height: '12px',
+                  border: '2px solid var(--text-muted)', borderTopColor: 'transparent',
+                  borderRadius: '50%',
+                  animation: 'ai-spin 0.8s linear infinite',
+                }} />
+                Analyzing…
+              </>
+            ) : (
+              <>
+                <span style={{ fontSize: '14px' }}>✦</span>
+                AI Analyze
+              </>
+            )}
+          </button>
         </div>
       </div>
 
-      {/* Chart Container */}
-      <div
-        ref={chartContainerRef}
-        style={{
-          flex: 1, minHeight: 0,
-          backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-main)'
-        }}
-      />
+      {/* Chart + Analysis Row */}
+      <div ref={chartRowRef} style={{
+        display: 'flex',
+        flex: '1 1 0%',
+        minHeight: '200px',
+        gap: '0px',
+      }}>
+        {/* Chart Container */}
+        <div
+          ref={chartContainerRef}
+          style={{
+            flex: '1 1 0%',
+            minWidth: 0,
+            backgroundColor: 'var(--bg-main)',
+            border: '1px solid var(--border-main)',
+          }}
+        />
+
+        {/* AI Analysis Panel — right side */}
+        {showAnalysis && (
+          <div style={{
+            width: '380px',
+            minWidth: '300px',
+            flexShrink: 0,
+            marginLeft: '10px',
+            backgroundColor: 'var(--bg-panel)',
+            border: '1px solid var(--border-main)',
+            borderLeft: '3px solid #8b5cf6',
+            borderRadius: '4px',
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+            animation: 'ai-slideIn 0.3s ease-out',
+          }}>
+            {/* Panel header */}
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '10px 14px',
+              borderBottom: '1px solid var(--border-main)',
+              flexShrink: 0,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '14px' }}>✦</span>
+                <span style={{ fontWeight: 'bold', fontSize: '13px' }}>AI Technical Analysis</span>
+                {analysisMetrics && (
+                  <span style={{
+                    color: 'var(--text-muted)', fontSize: '11px',
+                    backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+                    padding: '2px 8px', borderRadius: '10px',
+                  }}>
+                    {analysisMetrics.start_date} → {analysisMetrics.end_date}
+                    {' • '}
+                    <span style={{
+                      color: analysisMetrics.pct_change >= 0 ? 'var(--chart-up)' : 'var(--chart-down)',
+                      fontWeight: 'bold',
+                    }}>
+                      {analysisMetrics.pct_change >= 0 ? '+' : ''}{analysisMetrics.pct_change}%
+                    </span>
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => setShowAnalysis(false)}
+                style={{
+                  background: 'none', border: 'none', color: 'var(--text-muted)',
+                  cursor: 'pointer', fontSize: '16px', padding: '0 4px',
+                  fontFamily: 'Courier New, monospace', lineHeight: 1,
+                }}
+                title="Close analysis"
+              >✕</button>
+            </div>
+
+            {/* Panel body */}
+            <div style={{
+              padding: '14px 16px',
+              overflowY: 'auto',
+              fontSize: '12px',
+              lineHeight: '1.6',
+              color: 'var(--text-muted)',
+              flex: 1,
+            }}>
+              {analysisLoading && (
+                <div style={{
+                  display: 'flex', flexDirection: 'column',
+                  alignItems: 'center', justifyContent: 'center',
+                  padding: '30px 0', gap: '12px',
+                }}>
+                  <div style={{
+                    width: '28px', height: '28px',
+                    border: '3px solid var(--border-main)',
+                    borderTopColor: '#8b5cf6',
+                    borderRadius: '50%',
+                    animation: 'ai-spin 0.8s linear infinite',
+                  }} />
+                  <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
+                    Analyzing {symbolRef.current} chart data with AI…
+                  </span>
+                </div>
+              )}
+
+              {analysisError && (
+                <div style={{
+                  color: 'var(--chart-down)', padding: '12px',
+                  backgroundColor: isDark ? 'rgba(255,68,68,0.08)' : 'rgba(255,68,68,0.06)',
+                  borderRadius: '4px',
+                }}>
+                  ⚠ {analysisError}
+                </div>
+              )}
+
+              {!analysisLoading && !analysisError && analysisText && (
+                <div>{renderAnalysisText(analysisText)}</div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Keyframe animations */}
+      <style>{`
+        @keyframes ai-spin {
+          to { transform: rotate(360deg); }
+        }
+        @keyframes ai-slideIn {
+          from { opacity: 0; transform: translateX(20px); }
+          to   { opacity: 1; transform: translateX(0); }
+        }
+      `}</style>
     </div>
   );
 }

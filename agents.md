@@ -16,13 +16,15 @@ A React-based financial dashboard with real-time stock charts and technical anal
 **Backend & Scripts:**
 - FastAPI & Uvicorn (Runs on Port 3000)
 - Python integration natively via `main.py`
-- Python Scripts: `yfinance`, `requests`
+- Python Scripts: `yfinance`, `requests`, `python-dotenv`
+- AI Integration: OpenRouter Tencent Hy3 Preview API (`tencent/hy3-preview:free`) via REST — requires `OPENROUTER_API_KEY` in `.env`
 
 ## Project Structure
 - `src/`: React frontend (`App.jsx` handles 8 tabs, `api.js` connects to backend).
 - `src/content/`: Tab components (e.g., `InteractiveChart.jsx`, `tvInteractiveChart.jsx`).
 - `backend/main.py`: FastAPI server acting as the backend.
-- `backend/scripts/`: Python scripts for data fetching (`stockdata.py`, `googlefin.py`).
+- `backend/scripts/`: Python scripts for data fetching (`stockdata.py`, `googlefin.py`) and AI analysis (`chart_analyzer.py`).
+- `.env`: Environment variables (not committed) — holds `OPENROUTER_API_KEY`.
 
 ## Essential Commands & Endpoints
 - **Start App**: `npm run start` (Runs both frontend and backend concurrently)
@@ -32,11 +34,12 @@ A React-based financial dashboard with real-time stock charts and technical anal
   - `GET /api/stocks/multi`
   - `GET /api/googlefin`
   - `GET /api/search?q=AAPL` — Proxies Yahoo Finance search, filters to US equities & ETFs only (exchanges: NMS, NYQ, ASE, PNK, NYM, NCM, NGS, OEM, OQS; quoteTypes: EQUITY, ETF)
-- **Frontend APIs**: Accessible via `api.js` (e.g., `api.getStockData()`, `api.getStockDataRange()`, `api.searchStocks(query)`).
+  - `POST /api/analyze` — Sends visible OHLCV data to OpenRouter LLM (Tencent Hy3) for AI technical analysis (body: `{symbol, company_name, sector, data: [{date,open,high,low,price,volume}]}`)
+- **Frontend APIs**: Accessible via `api.js` (e.g., `api.getStockData()`, `api.getStockDataRange()`, `api.searchStocks(query)`, `api.analyzeChart(payload)`).
 
 ## Key Components
 - **InteractiveChart.jsx**: Uses Chart.js with the annotation plugin to show line/candlestick charts with peak/trough/breakout key points.
-- **TvInteractiveChart.jsx**: Uses lightweight-charts for a sleek, TradingView-style candlestick view with volume overlays. Dynamic infinite-scroll loading — starts with 6 months, loads 6-month chunks as user scrolls/zooms left. Real-time 30s background polling.
+- **TvInteractiveChart.jsx**: Uses lightweight-charts for a sleek, TradingView-style candlestick view with volume overlays. Dynamic infinite-scroll loading — starts with 6 months, loads 6-month chunks as user scrolls/zooms left. Real-time 30s background polling. **AI Analyze button** captures the visible OHLCV window and sends it to the OpenRouter API, displaying the generated technical analysis in a collapsible panel below the chart.
 
 ## Important Notes
 - Frontend: Port 5173 | Backend: Port 3000.
