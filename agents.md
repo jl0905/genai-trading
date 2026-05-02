@@ -27,7 +27,7 @@ A React-based financial dashboard with real-time stock charts and technical anal
 - `.env`: Environment variables (not committed) — holds `OPENROUTER_API_KEY`.
 
 ## Essential Commands & Endpoints
-- **Start App**: `npm run start` (Runs both frontend and backend concurrently)
+- **Start App**: `npm run start` (Runs both frontend and backend concurrently). *Note: Because the backend is a Python script, you must close the server and re-run `npm start` to apply changes if you want to test with the browser.*
 - **Backend APIs** (localhost:3000): 
   - `GET /api/stock?symbol=AAPL&period=6mo`
   - `GET /api/stock/range?symbol=AAPL&start=2024-01-01&end=2024-07-01` — Date-range fetch for dynamic chart loading

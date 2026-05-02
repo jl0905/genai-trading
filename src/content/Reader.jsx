@@ -7,15 +7,14 @@ const generateEducationalContent = () => {
       title: 'Introduction to Stock Graphs',
       content: `
         <h2>Understanding Stock Graphs: A Complete Guide</h2>
-        <p>Stock graphs (also called stock charts) are visual representations of a stock's price movement over time. They are essential tools for investors and traders to analyze market trends, identify patterns, and make informed investment decisions.</p>
-        <p>Whether you're a beginner investor or an experienced trader, understanding how to read stock graphs is fundamental to successful investing. This manual will guide you through every component of a stock graph and teach you how to use this powerful tool effectively.</p>
+        <p>Stock graphs (also called stock charts) are visual representations of a stock's price movement over time. In the <strong>GenAI Trading Dashboard</strong>, we provide dynamic, interactive charts (such as the <em>TV Chart</em> tab) to help you visualize these trends seamlessly.</p>
+        <p>Whether you're a beginner investor or an experienced trader, understanding how to read stock graphs is fundamental to successful investing. Our integrated <strong>AI Analyze</strong> feature can automatically break down these charts for you, but knowing the basics empowers you to make informed decisions.</p>
         <h3>Why Stock Graphs Matter</h3>
         <ul>
-          <li><strong>Visual Analysis:</strong> Charts make complex price data easy to understand at a glance</li>
-          <li><strong>Pattern Recognition:</strong> Identify trends, support levels, and resistance points</li>
-          <li><strong>Timing Decisions:</strong> Determine optimal entry and exit points for trades</li>
-          <li><strong>Risk Management:</strong> Assess volatility and potential price movements</li>
-          <li><strong>Historical Context:</strong> Understand how a stock has performed over time</li>
+          <li><strong>Visual Analysis:</strong> Charts make complex price data easy to understand at a glance.</li>
+          <li><strong>Pattern Recognition:</strong> Identify trends, support levels, and resistance points directly on our lightweight charts.</li>
+          <li><strong>AI Integration:</strong> Feed visible chart data into our AI engine for instant technical summaries.</li>
+          <li><strong>Risk Management:</strong> Assess volatility and potential price movements before entering a trade.</li>
         </ul>
       `
     },
@@ -24,16 +23,15 @@ const generateEducationalContent = () => {
       title: 'The Price Axis (Y-Axis)',
       content: `
         <h2>The Price Axis: Understanding Vertical Price Movement</h2>
-        <p>The Y-axis (vertical axis) of a stock graph displays the stock's price. This is the most fundamental component of any stock chart, showing how much a share of the company costs at any given point in time.</p>
+        <p>The Y-axis (vertical axis) of a stock graph displays the stock's price. On the <strong>GenAI Trading Dashboard's TV Chart</strong>, you can find the price axis on the right-hand side. It automatically scales to fit the visible price data as you zoom in and out.</p>
         <h3>Key Concepts:</h3>
         <ul>
-          <li><strong>Price Scale:</strong> Usually shows dollar amounts, with higher prices at the top and lower prices at the bottom</li>
-          <li><strong>Linear vs. Logarithmic:</strong> Linear scales show equal dollar changes, while logarithmic scales show equal percentage changes</li>
-          <li><strong>Price Range:</strong> The difference between the highest and lowest prices shown on the chart</li>
-          <li><strong>Precision:</strong> Most charts display prices to two decimal places (cents)</li>
+          <li><strong>Price Scale:</strong> Shows dollar amounts, with higher prices at the top and lower prices at the bottom.</li>
+          <li><strong>Auto-Scaling:</strong> Our charts automatically adjust the price range to ensure you always have the best view of the current price action.</li>
+          <li><strong>Real-Time Updates:</strong> As new market data arrives (every 30 seconds in our app), the price axis dynamically updates to reflect the latest trades.</li>
         </ul>
-        <h3>How to Read It:</h3>
-        <p>When looking at the price axis, pay attention to the overall range. A stock trading between $50-$60 has different volatility characteristics than one trading between $500-$600, even if both have the same dollar-range spread. Consider the percentage movements rather than just dollar amounts.</p>
+        <h3>How to Read It in Our App:</h3>
+        <p>When analyzing a stock using the <em>TV Chart</em>, drag the chart vertically or zoom in to inspect specific price levels. Our AI analysis tool also reads this exact price window when generating its insights, ensuring the AI sees exactly what you see.</p>
       `
     },
     {
@@ -41,20 +39,15 @@ const generateEducationalContent = () => {
       title: 'The Time Axis (X-Axis)',
       content: `
         <h2>The Time Axis: Reading Horizontal Time Periods</h2>
-        <p>The X-axis (horizontal axis) represents time. Stock graphs can display various timeframes, from minutes to decades, depending on your investment strategy and analysis needs.</p>
-        <h3>Common Timeframes:</h3>
+        <p>The X-axis (horizontal axis) represents time. In our dashboard, you can scroll left on the <strong>TV Chart</strong> to seamlessly load infinite historical data in 6-month chunks without ever refreshing the page.</p>
+        <h3>Timeframes in the GenAI Dashboard:</h3>
         <ul>
-          <li><strong>Intraday:</strong> 1-minute, 5-minute, 15-minute, 30-minute, 1-hour charts for day trading</li>
-          <li><strong>Daily:</strong> Each data point represents one trading day, ideal for swing traders</li>
-          <li><strong>Weekly:</strong> Each bar/candle represents one week, used by position traders</li>
-          <li><strong>Monthly:</strong> Each data point represents one month, preferred by long-term investors</li>
-          <li><strong>Yearly:</strong> Long-term historical analysis and trend identification</li>
+          <li><strong>Daily Data:</strong> Our charts currently display daily candlesticks, meaning each bar represents one full trading day.</li>
+          <li><strong>Dynamic Loading:</strong> As you pan backward in time, the app automatically fetches historical data from our FastAPI backend to fill in the timeline.</li>
+          <li><strong>Visible Range:</strong> The specific time window you are viewing determines what data is sent to the <strong>AI Analyze</strong> feature. Zoom in to analyze a specific week, or zoom out to analyze a multi-year trend.</li>
         </ul>
-        <h3>Choosing the Right Timeframe:</h3>
-        <p><strong>Day Traders:</strong> Use 1-15 minute charts for quick entry and exit decisions.</p>
-        <p><strong>Swing Traders:</strong> Daily charts help identify trends lasting days to weeks.</p>
-        <p><strong>Long-term Investors:</strong> Weekly and monthly charts reveal major trends and ignore daily noise.</p>
-        <p>Remember: Multiple timeframes can be used together for confirmation. A stock showing an uptrend on daily, weekly, and monthly charts has stronger momentum than one only trending up on a single timeframe.</p>
+        <h3>Choosing Your View:</h3>
+        <p>For swing trading or long-term investing, the daily chart provides excellent context. Try zooming out to view a full year of data, then click <em>AI Analyze</em> to let our AI evaluate the macro trend.</p>
       `
     },
     {
@@ -62,28 +55,19 @@ const generateEducationalContent = () => {
       title: 'Price Lines and Candlesticks',
       content: `
         <h2>Price Lines and Candlestick Patterns</h2>
-        <p>The main body of a stock graph shows price movement through either line charts or candlestick charts. Each represents price data differently and serves different analytical purposes.</p>
-        <h3>Line Charts:</h3>
+        <p>The main body of a stock graph shows price movement. While simple line charts connect closing prices, our <strong>TV Chart</strong> utilizes <strong>Candlestick Charts</strong> to provide a much richer picture of daily market psychology.</p>
+        <h3>Reading Candlesticks on the Dashboard:</h3>
+        <p>Each candlestick on our chart gives you four critical data points for that specific day:</p>
         <ul>
-          <li><strong>Simple and Clean:</strong> Connects closing prices with a continuous line</li>
-          <li><strong>Best For:</strong> Long-term trend analysis and identifying overall direction</li>
-          <li><strong>Limitations:</strong> Doesn't show intraday volatility or open/high/low prices</li>
+          <li><strong>Open:</strong> The price at the start of the trading day.</li>
+          <li><strong>High:</strong> The highest price reached during the day (top of the wick).</li>
+          <li><strong>Low:</strong> The lowest price reached during the day (bottom of the wick).</li>
+          <li><strong>Close:</strong> The final price at the end of the day.</li>
         </ul>
-        <h3>Candlestick Charts:</h3>
-        <p>Candlesticks provide four critical pieces of information for each time period:</p>
-        <ul>
-          <li><strong>Open:</strong> The price at the start of the time period</li>
-          <li><strong>High:</strong> The highest price reached during the period</li>
-          <li><strong>Low:</strong> The lowest price reached during the period</li>
-          <li><strong>Close:</strong> The final price at the end of the period</li>
-        </ul>
-        <h3>Reading Candlesticks:</h3>
-        <p><strong>Green/White Candles:</strong> Close price is higher than open price (bullish/buying pressure)</p>
-        <p><strong>Red/Black Candles:</strong> Close price is lower than open price (bearish/selling pressure)</p>
-        <p><strong>Long Bodies:</strong> Strong buying or selling pressure</p>
-        <p><strong>Short Bodies:</strong> Weak price movement, indecision in the market</p>
-        <p><strong>Long Shadows/Wicks:</strong> Price rejection - the market tested levels but reversed</p>
-        <p><strong>Doji:</strong> Open and close are nearly equal, showing market indecision</p>
+        <h3>Color Indicators:</h3>
+        <p><strong><span style="color: #00d4ff;">Cyan/Blue Candles:</span></strong> The close price was higher than the open price (bullish day). The stock gained value.</p>
+        <p><strong><span style="color: #ff4444;">Red Candles:</span></strong> The close price was lower than the open price (bearish day). The stock lost value.</p>
+        <p>Our AI model is specifically trained to recognize candlestick patterns like Dojis, Hammers, and Engulfing patterns when you request an analysis.</p>
       `
     },
     {
@@ -91,23 +75,15 @@ const generateEducationalContent = () => {
       title: 'Volume: The Confirmation Indicator',
       content: `
         <h2>Volume: Understanding Trading Activity</h2>
-        <p>Volume represents the number of shares traded during a specific time period. It's typically displayed as bars at the bottom of the stock graph and is one of the most important confirming indicators for price movements.</p>
+        <p>Volume represents the number of shares traded during a specific time period. On the <strong>GenAI Trading Dashboard</strong>, volume is displayed as a histogram at the bottom of the TV Chart, directly below the candlesticks.</p>
         <h3>Why Volume Matters:</h3>
         <ul>
-          <li><strong>Confirms Trends:</strong> Rising prices on high volume = strong uptrend</li>
-          <li><strong>Identifies Reversals:</strong> Price changes on unusually high volume may signal trend changes</li>
-          <li><strong>Shows Conviction:</strong> High volume indicates strong participant interest</li>
-          <li><strong>Signals Breakouts:</strong> Breakouts above resistance on high volume are more reliable</li>
-          <li><strong>Reveals Weakness:</strong> Low volume during price rises suggests lack of conviction</li>
+          <li><strong>Confirms Trends:</strong> Rising prices accompanied by high volume indicate a strong, healthy uptrend.</li>
+          <li><strong>Identifies Reversals:</strong> Massive volume spikes often occur at market bottoms or tops, signaling a potential change in direction.</li>
+          <li><strong>Color Coded:</strong> In our app, volume bars match the color of the corresponding daily candlestick (cyan for up days, red for down days) to help you quickly gauge buying vs. selling pressure.</li>
         </ul>
-        <h3>Volume Patterns to Watch:</h3>
-        <p><strong>High Volume + Price Increase:</strong> Strong buying interest, bullish signal</p>
-        <p><strong>High Volume + Price Decrease:</strong> Strong selling pressure, bearish signal</p>
-        <p><strong>Low Volume + Price Increase:</strong> Weak buying interest, potential reversal warning</p>
-        <p><strong>Low Volume + Price Decrease:</strong> Lack of selling interest, may indicate bottoming</p>
-        <p><strong>Volume Spikes:</strong> Sudden increases often accompany news events, earnings, or significant technical breakouts</p>
-        <h3>Volume Moving Average:</h3>
-        <p>Many charts include a volume moving average (typically 20-day or 50-day) to help identify whether current volume is above or below average. Volume above the moving average is considered significant.</p>
+        <h3>Using Volume with AI:</h3>
+        <p>When you click <strong>AI Analyze</strong>, the model looks at both price action <em>and</em> volume to determine the strength of a trend. A breakout on low volume will be flagged by the AI as potentially weak, whereas a high-volume breakout will be highlighted as a strong signal.</p>
       `
     },
     {
@@ -115,20 +91,14 @@ const generateEducationalContent = () => {
       title: 'Moving Averages: Trend Indicators',
       content: `
         <h2>Moving Averages: Smoothing Price Action</h2>
-        <p>Moving averages are trend-following indicators that smooth out price data to show the underlying direction. They appear as overlay lines on stock graphs and help identify trends, support/resistance, and potential reversal points.</p>
+        <p>Moving averages (MAs) are trend-following indicators that smooth out price data to show the underlying direction. They help filter out the day-to-day "noise" of the market to reveal the true trend.</p>
         <h3>Types of Moving Averages:</h3>
         <ul>
-          <li><strong>Simple Moving Average (SMA):</strong> Average of prices over a set period. 50-day and 200-day SMAs are most popular for identifying major trends.</li>
-          <li><strong>Exponential Moving Average (EMA):</strong> Gives more weight to recent prices, making it more responsive to current price action. Popular periods: 12-day and 26-day.</li>
+          <li><strong>Simple Moving Average (SMA):</strong> The average of prices over a set period (e.g., 50 days or 200 days).</li>
+          <li><strong>Exponential Moving Average (EMA):</strong> Gives more weight to recent prices, making it more responsive to current price action.</li>
         </ul>
-        <h3>How to Use Moving Averages:</h3>
-        <p><strong>Trend Identification:</strong> Price above a rising moving average = uptrend. Price below a falling moving average = downtrend.</p>
-        <p><strong>Support and Resistance:</strong> Moving averages often act as dynamic support (in uptrends) or resistance (in downtrends).</p>
-        <p><strong>Golden Cross:</strong> When 50-day SMA crosses above 200-day SMA. Bullish signal indicating long-term trend change.</p>
-        <p><strong>Death Cross:</strong> When 50-day SMA crosses below 200-day SMA. Bearish signal warning of potential decline.</p>
-        <p><strong>Price Crossovers:</strong> When price crosses above/below a moving average, it may signal trend change or continuation.</p>
-        <h3>Multiple Moving Averages:</h3>
-        <p>Traders often use multiple moving averages together. When shorter-term MAs cross above longer-term MAs, it suggests increasing momentum. The spacing between MAs indicates trend strength - wide spacing = strong trend, converging = weakening trend.</p>
+        <h3>AI and Moving Averages:</h3>
+        <p>While moving average lines might not always be visibly overlaid on the chart, our <strong>Tencent Hy3 AI Engine</strong> automatically calculates and analyzes key moving averages behind the scenes. When you run an analysis, the AI will often point out if a stock has recently crossed its 50-day or 200-day MA, or if a "Golden Cross" (bullish) or "Death Cross" (bearish) has occurred.</p>
       `
     },
     {
@@ -136,29 +106,14 @@ const generateEducationalContent = () => {
       title: 'Support and Resistance Levels',
       content: `
         <h2>Support and Resistance: Key Price Levels</h2>
-        <p>Support and resistance are price levels where a stock has historically had difficulty falling below (support) or rising above (resistance). These levels appear as horizontal zones on stock graphs and are crucial for predicting price movements.</p>
-        <h3>Understanding Support:</h3>
-        <p>Support is a price level where buying interest is strong enough to overcome selling pressure. Think of it as a "floor" where the price tends to bounce back up.</p>
+        <p>Support and resistance are price levels where a stock has historically had difficulty falling below (support) or rising above (resistance). These invisible zones are crucial for predicting future price movements.</p>
+        <h3>Understanding the Levels:</h3>
         <ul>
-          <li><strong>Previous Lows:</strong> Areas where the stock has bottomed before often become support</li>
-          <li><strong>Moving Averages:</strong> Can act as dynamic support in uptrends</li>
-          <li><strong>Psychological Levels:</strong> Round numbers ($100, $50) often act as support due to order clustering</li>
-          <li><strong>Volume Concentration:</strong> Areas with heavy volume often create support</li>
+          <li><strong>Support (The Floor):</strong> A price level where buying interest is strong enough to overcome selling pressure. The price tends to bounce up from here.</li>
+          <li><strong>Resistance (The Ceiling):</strong> A price level where selling pressure overcomes buying interest. The price struggles to break through this ceiling.</li>
         </ul>
-        <h3>Understanding Resistance:</h3>
-        <p>Resistance is a price level where selling pressure overcomes buying interest, acting as a "ceiling" that the price struggles to break through.</p>
-        <ul>
-          <li><strong>Previous Highs:</strong> Areas where the stock has peaked before become resistance</li>
-          <li><strong>Moving Averages:</strong> Can act as dynamic resistance in downtrends</li>
-          <li><strong>Breakout Points:</strong> Old resistance can become new support once broken</li>
-        </ul>
-        <h3>Role Reversal:</h3>
-        <p>One of the most important concepts: once support is broken, it often becomes resistance, and vice versa. When a stock breaks above resistance, that old resistance level may provide support on future pullbacks.</p>
-        <h3>How to Use Support/Resistance:</h3>
-        <p><strong>Entry Points:</strong> Buy near support with stop-loss just below</p>
-        <p><strong>Exit Points:</strong> Consider taking profits near resistance</p>
-        <p><strong>Breakout Trading:</strong> Enter when price breaks above resistance on high volume</p>
-        <p><strong>Stop Loss Placement:</strong> Place stops just beyond support/resistance levels</p>
+        <h3>How the GenAI Dashboard Helps:</h3>
+        <p>Identifying accurate support and resistance zones manually can be subjective and difficult for beginners. By clicking the <strong>AI Analyze</strong> button on your current chart view, our AI system will automatically detect and list the key support and resistance levels based on historical price action, helping you set smarter entry points and stop-losses.</p>
       `
     },
     {
@@ -475,14 +430,14 @@ export default function Reader() {
         borderRight: '1px solid #333333', 
         overflowY: 'auto', 
         padding: '16px 12px',
-        backgroundColor: '#000000',
+        backgroundColor: '#0a0a0a',
         flexShrink: 0,
         height: '100%',
         position: 'sticky',
         top: 0
       }}>
         <h4 style={{
-          marginBottom: '16px', color: '#666666',
+          marginBottom: '16px', color: '#999999',
           textTransform: 'uppercase', letterSpacing: '2px',
           fontSize: '10px', fontWeight: '600'
         }}>Contents</h4>
@@ -499,7 +454,7 @@ export default function Reader() {
                     border: 'none',
                     borderLeft: activeSection === section.id ? '2px solid #ffffff' : '2px solid transparent',
                     backgroundColor: 'transparent',
-                    color: activeSection === section.id ? '#ffffff' : '#666666',
+                    color: activeSection === section.id ? '#ffffff' : '#b0b0b0',
                     cursor: 'pointer',
                     fontSize: '12px',
                     fontWeight: activeSection === section.id ? '600' : '400',
@@ -510,12 +465,12 @@ export default function Reader() {
                   }}
                   onMouseEnter={(e) => {
                     if (activeSection !== section.id) {
-                      e.target.style.color = '#aaaaaa';
+                      e.target.style.color = '#e0e0e0';
                     }
                   }}
                   onMouseLeave={(e) => {
                     if (activeSection !== section.id) {
-                      e.target.style.color = '#666666';
+                      e.target.style.color = '#b0b0b0';
                     }
                   }}
                 >
