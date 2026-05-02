@@ -298,6 +298,17 @@ export default function TvInteractiveChart() {
     };
   }, []);
 
+  // --- Force resize when analysis panel toggles ---
+  useEffect(() => {
+    if (chartRef.current && chartContainerRef.current) {
+      setTimeout(() => {
+        if (chartRef.current && chartContainerRef.current) {
+          chartRef.current.applyOptions({ width: chartContainerRef.current.clientWidth });
+        }
+      }, 50); // Small delay to allow flexbox to calculate new layout
+    }
+  }, [showAnalysis]);
+
   // --- Cleanup chart on unmount ---
   useEffect(() => {
     return () => {
@@ -691,6 +702,7 @@ export default function TvInteractiveChart() {
         display: 'flex',
         flex: '1 1 0%',
         minHeight: '200px',
+        minWidth: 0,
         gap: '0px',
       }}>
         {/* Chart Container */}
@@ -699,6 +711,8 @@ export default function TvInteractiveChart() {
           style={{
             flex: '1 1 0%',
             minWidth: 0,
+            position: 'relative',
+            overflow: 'hidden',
             backgroundColor: 'var(--bg-main)',
             border: '1px solid var(--border-main)',
           }}

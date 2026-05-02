@@ -59,9 +59,9 @@ def _build_prompt(symbol: str, company_name: str, sector: str,
         "recommendations — frame everything as observational analysis."
     )
 
-    # Build a compact text representation of the OHLCV rows
+    # Build a compact text representation of the OHLCV rows (last 30 days for snappiness)
     ohlcv_lines = []
-    for d in data:
+    for d in data[-30:]:
         ohlcv_lines.append(
             f"{d['date']}  O:{d['open']}  H:{d['high']}  L:{d['low']}  "
             f"C:{d['price']}  V:{d['volume']}"
@@ -73,13 +73,13 @@ def _build_prompt(symbol: str, company_name: str, sector: str,
         f"**Sector:** {sector}\n"
         f"**Visible window:** {metrics['start_date']} → {metrics['end_date']} "
         f"({metrics['trading_days']} trading days)\n\n"
-        f"**Summary metrics:**\n"
+        f"**Summary metrics (for full visible window):**\n"
         f"- Start price: ${metrics['start_price']}  →  End price: ${metrics['end_price']}  "
         f"({'+' if metrics['pct_change'] >= 0 else ''}{metrics['pct_change']}%)\n"
         f"- Period high: ${metrics['period_high']}  |  Period low: ${metrics['period_low']}\n"
         f"- Avg close: ${metrics['avg_close']}  |  Volatility (σ): ${metrics['volatility']}\n"
         f"- Avg volume: {metrics['avg_volume']:,}  |  Max volume: {metrics['max_volume']:,}\n\n"
-        f"**Daily OHLCV data:**\n```\n{ohlcv_text}\n```\n\n"
+        f"**Daily OHLCV data (last {len(data[-30:])} days):**\n```\n{ohlcv_text}\n```\n\n"
         f"Please analyse this chart snapshot."
     )
 
@@ -113,14 +113,15 @@ def analyze_chart(symbol: str, company_name: str, sector: str,
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "HTTP-Referer": "http://localhost:3000",
+        "X-Title": "GenAI Trading Dashboard"
     }
     
     payload = {
         "model": "tencent/hy3-preview:free",
         "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
+            {"role": "user", "content": f"{system_prompt}\n\n{user_prompt}"}
         ],
         "temperature": 0.7,
         "max_tokens": 2048,
@@ -134,9 +135,21 @@ def analyze_chart(symbol: str, company_name: str, sector: str,
         # Extract generated text from OpenRouter response
         choices = body.get("choices", [])
         if not choices:
+            if "error" in body:
+                err_msg = body["error"].get("message", str(body["error"])) if isinstance(body["error"], dict) else str(body["error"])
+                return {"success": False, "error": f"OpenRouter API error: {err_msg}"}
             return {"success": False, "error": "No response from OpenRouter API."}
 
-        text = choices[0].get("message", {}).get("content", "").strip()
+        message = choices[0].get("message", {})
+        content = message.get("content")
+        
+        if not content:
+            refusal = message.get("refusal")
+            if refusal:
+                return {"success": False, "error": f"Model refused: {refusal}"}
+            return {"success": False, "error": "Model returned an empty response."}
+
+        text = content.strip()
 
         return {
             "success": True,
