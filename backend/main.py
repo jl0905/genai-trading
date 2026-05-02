@@ -1,18 +1,23 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 import sys
 import os
 import requests
 import hashlib
 from pymongo import MongoClient
+from dotenv import load_dotenv
+
+# Load environment variables from .env file at project root
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 # Add scripts directory to path to import local modules
 sys.path.append(os.path.join(os.path.dirname(__file__), "scripts"))
 
 from stockdata import get_stock_data, get_multiple_stocks, get_stock_data_range
 from googlefin import get_bitcoin_price
+from chart_analyzer import analyze_chart
 
 app = FastAPI(title="GenAI Trading Dashboard API")
 
@@ -39,6 +44,20 @@ app.add_middleware(
 class AuthParams(BaseModel):
     username: str
     password: Optional[str] = None
+
+class OHLCVItem(BaseModel):
+    date: str
+    open: float
+    high: float
+    low: float
+    price: float
+    volume: int
+
+class AnalyzeChartParams(BaseModel):
+    symbol: str
+    company_name: str = "Unknown"
+    sector: str = "Unknown"
+    data: List[OHLCVItem]
 
 @app.post("/api/auth")
 def auth_user(params: AuthParams):
@@ -141,3 +160,15 @@ def search_stocks(q: str):
         return {"success": True, "quotes": filtered[:10]}
     except Exception as e:
         return {"success": False, "error": str(e), "quotes": []}
+
+@app.post("/api/analyze")
+def analyze_chart_endpoint(params: AnalyzeChartParams):
+    """Send visible chart OHLCV data to an LLM for technical analysis."""
+    data_dicts = [item.model_dump() for item in params.data]
+    result = analyze_chart(
+        symbol=params.symbol,
+        company_name=params.company_name,
+        sector=params.sector,
+        data=data_dicts,
+    )
+    return result

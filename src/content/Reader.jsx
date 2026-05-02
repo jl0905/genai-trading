@@ -463,7 +463,7 @@ export default function Reader() {
   return (
     <div className="reader-container" style={{ 
       display: 'flex', 
-      height: '100vh',
+      height: '100%',
       fontFamily: 'Courier New, monospace',
       backgroundColor: '#000000',
       color: '#ffffff',
@@ -477,7 +477,7 @@ export default function Reader() {
         padding: '16px 12px',
         backgroundColor: '#000000',
         flexShrink: 0,
-        height: '100vh',
+        height: '100%',
         position: 'sticky',
         top: 0
       }}>
@@ -534,7 +534,7 @@ export default function Reader() {
         overflowX: 'hidden',
         padding: '40px 60px 40px 40px',
         backgroundColor: '#000000',
-        height: '100vh'
+        height: '100%'
       }} ref={contentRef}>
         <style>{`
           .reader-scroll-hidden::-webkit-scrollbar { display: none; }

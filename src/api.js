@@ -60,4 +60,14 @@ export const api = {
     const response = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(query)}`);
     return response.json();
   },
+
+  // AI chart analysis — send visible OHLCV snapshot to LLM
+  analyzeChart: async (payload) => {
+    const response = await fetch(`${API_BASE_URL}/analyze`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return response.json();
+  },
 };

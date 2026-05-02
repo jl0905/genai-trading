@@ -153,7 +153,7 @@ export default function EntryVisual() {
         return (
                 <div 
                         ref={containerRef}
-                        className="flex items-center justify-center min-h-screen cursor-move select-none"
+                        className="flex items-center justify-center h-full w-full overflow-hidden cursor-move select-none"
                         style={{ backgroundColor: 'var(--bg-main)' }}
                         onMouseDown={handleMouseDown}
                         onMouseMove={handleMouseMove}
