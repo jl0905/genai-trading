@@ -419,7 +419,7 @@ export default function Reader() {
     <div className="reader-container" style={{ 
       display: 'flex', 
       height: '100%',
-      fontFamily: 'Courier New, monospace',
+      fontFamily: 'var(--font-main)',
       backgroundColor: '#000000',
       color: '#ffffff',
       overflow: 'hidden'
@@ -460,7 +460,7 @@ export default function Reader() {
                     fontWeight: activeSection === section.id ? '600' : '400',
                     letterSpacing: '0.3px',
                     transition: 'all 0.15s ease',
-                    fontFamily: 'Courier New, monospace',
+                    fontFamily: 'var(--font-main)',
                     borderRadius: 0
                   }}
                   onMouseEnter={(e) => {
