@@ -6,9 +6,9 @@ a natural-language technical analysis of the price action.
 """
 
 import os
-import json
-import requests
 from statistics import mean, stdev
+from openai import OpenAI
+import openai
 
 
 def _compute_metrics(data: list[dict]) -> dict:
@@ -44,24 +44,44 @@ def _build_prompt(symbol: str, company_name: str, sector: str,
                   metrics: dict, data: list[dict]) -> tuple[str, str]:
     """Return (system_prompt, user_prompt) for the LLM."""
 
-    system_prompt = (
-        "You are an expert financial technical analyst. The user will give you "
-        "a snapshot of OHLCV candlestick data for a stock. Provide a clear, "
-        "detailed analysis that covers:\n"
-        "- Overall trend direction and strength\n"
-        "- Key support and resistance levels observed in the data\n"
-        #"3. Notable candlestick patterns (e.g. doji, engulfing, hammer)\n"
-        "- Volume analysis — any spikes or divergences\n"
-        "- Possible catalysts or market context if the company/sector is well-known\n"
-        "- A brief forward-looking outlook based solely on the technical picture\n\n"
-        "Write in a professional but accessible tone. Use bullet points and "
-        "short paragraphs. Do NOT provide financial advice or specific buy/sell "
-        "recommendations — frame everything as observational analysis."
-    )
+    system_prompt = """You are an expert financial technical analyst. The user will give you a snapshot of OHLCV candlestick data for a stock. Provide a brief analysis that covers:
 
-    # Build a compact text representation of the OHLCV rows (last 30 days for snappiness)
+- possible catalysts or market context for why the price is moving the way it is (Label this section 'MARKET CONTEXT')
+
+- Overall trend direction and strength (Label this section 'PRICE TREND')
+
+- A brief forward-looking outlook based solely on the technical picture (Label this section 'OUTLOOK')
+
+Write in a professional but accessible tone. Use bullet points and short paragraphs.
+
+Here is an example of the formatting you should use:
+
+MARKET CONTEXT
+Apple recently reported a "standout" Q2 2026 earnings beat, with EPS of $2.01 (up 22% year-over-year) and revenue of $111.2 billion.  
+
+Record March quarter revenue for iPhone was driven by high demand for the iPhone 17 lineup, alongside successful launches of the M4 iPad Air and the new MacBook Neo.  
+
+The market is reacting to the news of Tim Cook stepping down as CEO. While such news often creates uncertainty, the strong financial performance and the appointment of Greg Abel to key leadership roles (supported by Berkshire Hathaway's recent commentary) have maintained investor confidence.
+
+Investors are closely watching component costs, specifically a global memory shortage that could slightly compress future margins.  
+
+PRICE TREND
+The trend is strongly bullish in the short-to-medium term.  
+
+Following the earnings gap up on May 1st, the stock reached prices near $280.14.  
+
+The stock recently broke out of a "rectangle formation" (sideways consolidation) above resistance at $269. The Relative Strength Index (RSI) is rising, confirming momentum, though some analysts warn it is approaching "overbought" territory after a 15% gain in April.  
+
+OUTLOOK
+With the $269 resistance now acting as support, the technical setup points toward a primary target of $308 in the coming months.  
+
+Immediate downside protection is found at $271 (recent close) and $257.
+
+While the chart looks favorable, the stock is trading at a P/E of approximately 33.8x, which is a premium compared to its historical average. A failure to hold above $270 could trigger a "retest" of the $250 level before further upside."""
+
+    # Build a compact text representation of the OHLCV rows for the visible window
     ohlcv_lines = []
-    for d in data[-30:]:
+    for d in data:
         ohlcv_lines.append(
             f"{d['date']}  O:{d['open']}  H:{d['high']}  L:{d['low']}  "
             f"C:{d['price']}  V:{d['volume']}"
@@ -79,7 +99,7 @@ def _build_prompt(symbol: str, company_name: str, sector: str,
         f"- Period high: ${metrics['period_high']}  |  Period low: ${metrics['period_low']}\n"
         f"- Avg close: ${metrics['avg_close']}  |  Volatility (σ): ${metrics['volatility']}\n"
         f"- Avg volume: {metrics['avg_volume']:,}  |  Max volume: {metrics['max_volume']:,}\n\n"
-        f"**Daily OHLCV data (last {len(data[-30:])} days):**\n```\n{ohlcv_text}\n```\n\n"
+        f"**Daily OHLCV data ({len(data)} days in visible window):**\n```\n{ohlcv_text}\n```\n\n"
         f"Please analyse this chart snapshot."
     )
 
@@ -109,13 +129,6 @@ def analyze_chart(symbol: str, company_name: str, sector: str,
         symbol, company_name, sector, metrics, data
     )
 
-    # --- Call OpenRouter REST API ---
-    try:
-        from openai import OpenAI
-        import openai
-    except ImportError:
-        return {"success": False, "error": "The 'openai' python package is not installed. Please run 'pip install openai'."}
-
     try:
         client = OpenAI(
             base_url="https://openrouter.ai/api/v1",
@@ -123,7 +136,7 @@ def analyze_chart(symbol: str, company_name: str, sector: str,
         )
 
         response = client.chat.completions.create(
-            model="tencent/hy3-preview:free",
+            model="openai/gpt-oss-120b:free",
             messages=[
                 {"role": "user", "content": f"{system_prompt}\n\n{user_prompt}"}
             ],

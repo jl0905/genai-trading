@@ -6,7 +6,7 @@ import { useTheme } from '../ThemeContext.jsx';
 const LOAD_CHUNK_MONTHS = 6;
 const LOAD_TRIGGER_BARS = 20;
 
-export default function TvInteractiveChart() {
+export default function TvInteractiveChart({ isActive = true }) {
   const [stockData, setStockData] = useState([]);
   const [stockInfo, setStockInfo] = useState(null);
   const [realTimeData, setRealTimeData] = useState(null);
@@ -26,6 +26,78 @@ export default function TvInteractiveChart() {
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState(null);
   const [showAnalysis, setShowAnalysis] = useState(false);
+  const [visibleRangeInfo, setVisibleRangeInfo] = useState(null);
+
+  const showAnalysisRef = useRef(false);
+  useEffect(() => { showAnalysisRef.current = showAnalysis; }, [showAnalysis]);
+
+  // Resize / drag state
+  const [panelWidth, setPanelWidth] = useState(380);
+  const panelWidthRef = useRef(380);
+  useEffect(() => { panelWidthRef.current = panelWidth; }, [panelWidth]);
+
+  const isDraggingRef = useRef(false);
+  const dragStartRef = useRef({ x: 0, width: 0 });
+
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (!isDraggingRef.current) return;
+      const deltaX = dragStartRef.current.x - e.clientX; 
+      const newWidth = dragStartRef.current.width + deltaX;
+      
+      if (!showAnalysisRef.current) {
+        if (deltaX > 5) {
+          setShowAnalysis(true);
+        } else if (deltaX < -5) {
+          return; // Ignore drag right when already closed
+        } else {
+          return; // Wait for drag threshold
+        }
+      }
+      
+      if (newWidth < 80) {
+        if (dragStartRef.current.width > 0) {
+          // Snap closed during drag only if we started from an open state
+          setShowAnalysis(false);
+          isDraggingRef.current = false;
+          document.body.style.cursor = 'default';
+          setPanelWidth(380);
+        } else {
+          // If we started from closed, just show the small width smoothly
+          setPanelWidth(Math.max(newWidth, 6));
+        }
+      } else {
+        setPanelWidth(Math.min(newWidth, window.innerWidth - 100));
+      }
+    };
+    const handleMouseUp = () => {
+      if (isDraggingRef.current) {
+        isDraggingRef.current = false;
+        document.body.style.cursor = 'default';
+        
+        // Snap to minimum usable size ONLY if we just dragged it open from a completely closed state
+        if (showAnalysisRef.current && dragStartRef.current.width === 0) {
+          setPanelWidth((prev) => (prev < 250 ? 250 : prev));
+        }
+        
+        // Force chart resize when dragging finishes
+        setTimeout(() => {
+          if (chartRef.current && chartContainerRef.current) {
+            chartRef.current.applyOptions({
+              width: chartContainerRef.current.clientWidth,
+              height: chartContainerRef.current.clientHeight
+            });
+          }
+        }, 50);
+      }
+    };
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
 
   const { theme } = useTheme();
   const isDark = theme === 'dark';
@@ -44,6 +116,7 @@ export default function TvInteractiveChart() {
   const isLoadingMoreRef = useRef(false);
   const visibleRangeRef = useRef(null);
   const initialLoadDoneRef = useRef(false);
+  const initialFitDoneRef = useRef(false);
   const symbolRef = useRef(symbol);
 
   // Keep refs in sync with state
@@ -164,8 +237,11 @@ export default function TvInteractiveChart() {
   }, [symbol]);
 
   // --- Background refresh (latest data only) ---
+  const isActiveRef = useRef(isActive);
+  useEffect(() => { isActiveRef.current = isActive; }, [isActive]);
+
   const backgroundRefresh = useCallback(async () => {
-    if (!initialLoadDoneRef.current) return;
+    if (!initialLoadDoneRef.current || !isActiveRef.current) return;
     try {
       const data = await api.getStockData(symbol, '5d');
       if (data.success) {
@@ -222,7 +298,7 @@ export default function TvInteractiveChart() {
         layout: {
           background: { type: ColorType.Solid, color: chartBg },
           textColor: chartText,
-          fontFamily: 'Courier New, monospace',
+          fontFamily: "'Courier New', Courier, monospace",
           fontSize: 12,
         },
         grid: { vertLines: { color: chartGrid }, horzLines: { color: chartGrid } },
@@ -232,7 +308,7 @@ export default function TvInteractiveChart() {
           horzLine: { color: crosshairLine, labelBackgroundColor: labelBg },
         },
         rightPriceScale: { borderColor: chartBorder, scaleMargins: { top: 0.1, bottom: 0.25 } },
-        timeScale: { borderColor: chartBorder, timeVisible: false, secondsVisible: false },
+        timeScale: { borderColor: chartBorder, timeVisible: false, secondsVisible: false, fixRightEdge: true },
         handleScroll: { vertTouchDrag: false },
       });
 
@@ -252,6 +328,29 @@ export default function TvInteractiveChart() {
         if (logicalRange && logicalRange.from < LOAD_TRIGGER_BARS) {
           loadMoreRef.current?.();
         }
+      });
+
+      let timeoutId = null;
+      chartRef.current.timeScale().subscribeVisibleTimeRangeChange((timeRange) => {
+        if (timeoutId) clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+          if (timeRange && stockDataRef.current.length > 0) {
+            const fromStr = typeof timeRange.from === 'string' 
+              ? timeRange.from 
+              : new Date(timeRange.from * 1000).toISOString().split('T')[0];
+            const toStr = typeof timeRange.to === 'string' 
+              ? timeRange.to 
+              : new Date(timeRange.to * 1000).toISOString().split('T')[0];
+            
+            const visibleData = stockDataRef.current.filter(d => d.date >= fromStr && d.date <= toStr);
+            if (visibleData.length > 0) {
+              setVisibleRangeInfo({
+                start: visibleData[0],
+                end: visibleData[visibleData.length - 1]
+              });
+            }
+          }
+        }, 50);
       });
     }
 
@@ -273,17 +372,21 @@ export default function TvInteractiveChart() {
     if (visibleRangeRef.current) {
       chartRef.current.timeScale().setVisibleRange(visibleRangeRef.current);
       visibleRangeRef.current = null;
-    } else if (!initialLoadDoneRef.current || stockData.length <= 130) {
+    } else if (isActive && (!initialFitDoneRef.current || stockData.length <= 130)) {
       chartRef.current.timeScale().fitContent();
+      initialFitDoneRef.current = true;
     }
-  }, [stockData]);
+  }, [stockData, isActive]);
 
   // --- Resize handler (uses ResizeObserver to react to container width changes) ---
   const chartRowRef = useRef(null);
   useEffect(() => {
     const syncChartWidth = () => {
-      if (chartRef.current && chartContainerRef.current) {
-        chartRef.current.applyOptions({ width: chartContainerRef.current.clientWidth });
+      if (chartRef.current && chartContainerRef.current && chartContainerRef.current.clientWidth > 0) {
+        chartRef.current.applyOptions({ 
+          width: chartContainerRef.current.clientWidth,
+          height: chartContainerRef.current.clientHeight
+        });
       }
     };
 
@@ -302,7 +405,25 @@ export default function TvInteractiveChart() {
     };
   }, []);
 
-  // --- Force resize when analysis panel toggles ---
+  // --- Ensure chart renders and fits correctly when becoming active ---
+  useEffect(() => {
+    if (isActive && chartRef.current && chartContainerRef.current) {
+      setTimeout(() => {
+        if (chartRef.current && chartContainerRef.current && chartContainerRef.current.clientWidth > 0) {
+          chartRef.current.applyOptions({ 
+            width: chartContainerRef.current.clientWidth,
+            height: chartContainerRef.current.clientHeight
+          });
+          if (!initialFitDoneRef.current && stockDataRef.current.length > 0) {
+            chartRef.current.timeScale().fitContent();
+            initialFitDoneRef.current = true;
+          }
+        }
+      }, 50);
+    }
+  }, [isActive]);
+
+  // --- Force resize when analysis panel toggles or resizes ---
   useEffect(() => {
     if (chartRef.current && chartContainerRef.current) {
       setTimeout(() => {
@@ -311,7 +432,7 @@ export default function TvInteractiveChart() {
         }
       }, 50); // Small delay to allow flexbox to calculate new layout
     }
-  }, [showAnalysis]);
+  }, [showAnalysis, panelWidth]);
 
   // --- Cleanup chart on unmount ---
   useEffect(() => {
@@ -328,6 +449,7 @@ export default function TvInteractiveChart() {
   // --- Reset chart when symbol changes ---
   useEffect(() => {
     initialLoadDoneRef.current = false;
+    initialFitDoneRef.current = false;
     allHistoryLoadedRef.current = false;
     oldestDateRef.current = null;
     stockDataRef.current = [];
@@ -339,6 +461,7 @@ export default function TvInteractiveChart() {
     setAnalysisMetrics(null);
     setAnalysisLoading(false);
     setAnalysisError(null);
+    setVisibleRangeInfo(null);
 
     if (chartRef.current) {
       chartRef.current.remove();
@@ -480,7 +603,7 @@ export default function TvInteractiveChart() {
     return (
       <div style={{
         width: '100%', height: '100vh', padding: '20px',
-        backgroundColor: 'var(--bg-main)', fontFamily: 'Courier New, monospace', overflow: 'hidden'
+        backgroundColor: 'var(--bg-main)', fontFamily: 'var(--font-main)', overflow: 'hidden'
       }}>
         <div style={{ color: 'var(--text-main)' }}>Loading candlestick data...</div>
       </div>
@@ -491,7 +614,7 @@ export default function TvInteractiveChart() {
     return (
       <div style={{
         width: '100%', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        backgroundColor: 'var(--bg-main)', color: 'var(--chart-down)', fontFamily: 'Courier New, monospace'
+        backgroundColor: 'var(--bg-main)', color: 'var(--chart-down)', fontFamily: 'var(--font-main)'
       }}>
         <div>Error: {error}</div>
       </div>
@@ -502,7 +625,7 @@ export default function TvInteractiveChart() {
     <div style={{
       width: '100%', height: '100%', padding: '20px',
       backgroundColor: 'var(--bg-main)', color: 'var(--text-main)',
-      fontFamily: 'Courier New, monospace', overflowY: 'auto', overflowX: 'hidden',
+      fontFamily: 'var(--font-main)', overflowY: 'auto', overflowX: 'hidden',
       display: 'flex', flexDirection: 'column'
     }}>
       {/* Header */}
@@ -539,7 +662,7 @@ export default function TvInteractiveChart() {
                 style={{
                   backgroundColor: 'var(--bg-main)', color: 'var(--text-main)',
                   border: '2px solid var(--border-focus)', borderRight: 'none',
-                  padding: '6px 10px', fontFamily: 'Courier New, monospace',
+                  padding: '6px 10px', fontFamily: 'var(--font-main)',
                   fontSize: '12px', width: '200px', outline: 'none'
                 }}
               />
@@ -561,7 +684,7 @@ export default function TvInteractiveChart() {
                         style={{
                           padding: '8px 12px', cursor: 'pointer',
                           borderBottom: '1px solid var(--border-main)',
-                          fontFamily: 'Courier New, monospace', fontSize: '12px',
+                          fontFamily: 'var(--font-main)', fontSize: '12px',
                           display: 'flex', justifyContent: 'space-between', alignItems: 'center'
                         }}
                         onMouseEnter={(e) => e.target.style.backgroundColor = 'var(--bg-panel)'}
@@ -592,7 +715,7 @@ export default function TvInteractiveChart() {
             <button type="submit" style={{
               backgroundColor: 'var(--text-main)', color: 'var(--bg-main)',
               border: '2px solid var(--border-focus)', padding: '6px 10px',
-              fontFamily: 'Courier New, monospace', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer'
+              fontFamily: 'var(--font-main)', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer'
             }}>Go</button>
           </form>
 
@@ -603,7 +726,7 @@ export default function TvInteractiveChart() {
               backgroundColor: loading ? 'var(--bg-panel)' : 'var(--text-main)',
               color: loading ? 'var(--text-muted)' : 'var(--bg-main)',
               border: '2px solid var(--border-focus)', padding: '6px 12px',
-              fontFamily: 'Courier New, monospace', fontSize: '12px', fontWeight: 'bold',
+              fontFamily: 'var(--font-main)', fontSize: '12px', fontWeight: 'bold',
               cursor: loading ? 'not-allowed' : 'pointer', textTransform: 'uppercase',
               opacity: loading ? 0.6 : 1
             }}
@@ -647,6 +770,19 @@ export default function TvInteractiveChart() {
             </div>
           )}
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '20px' }}>
+            {visibleRangeInfo && (
+              <div style={{ textAlign: 'right', borderRight: '1px solid var(--border-main)', paddingRight: '20px' }}>
+                <div style={{ color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase' }}>Visible Window</div>
+                <div style={{ fontSize: '12px', fontWeight: 'bold' }}>
+                  <span style={{ color: 'var(--text-main)' }}>{visibleRangeInfo.start.date}</span>
+                  <span style={{ color: 'var(--text-muted)', margin: '0 4px' }}>→</span>
+                  <span style={{ color: 'var(--text-main)' }}>{visibleRangeInfo.end.date}</span>
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                  ${visibleRangeInfo.start.price.toFixed(2)} — ${visibleRangeInfo.end.price.toFixed(2)}
+                </div>
+              </div>
+            )}
             <div style={{ textAlign: 'right' }}>
               <div style={{ color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase' }}>Last Updated</div>
               <div style={{ fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
@@ -664,7 +800,7 @@ export default function TvInteractiveChart() {
                 color: analysisLoading ? 'var(--text-muted)' : 'var(--bg-main)',
                 border: '2px solid var(--border-focus)',
                 padding: '8px 14px',
-                fontFamily: 'Courier New, monospace',
+                fontFamily: 'var(--font-main)',
                 fontSize: '12px',
                 fontWeight: 'bold',
                 cursor: analysisLoading ? 'not-allowed' : 'pointer',
@@ -721,21 +857,46 @@ export default function TvInteractiveChart() {
         />
 
         {/* AI Analysis Panel — right side */}
-        {showAnalysis && (
+        {showAnalysis ? (
           <div style={{
-            width: '380px',
-            minWidth: '300px',
+            width: `${panelWidth}px`,
             flexShrink: 0,
             marginLeft: '10px',
             backgroundColor: 'var(--bg-panel)',
             border: '1px solid var(--border-main)',
-            borderLeft: '3px solid var(--theme-primary)',
             borderRadius: '4px',
             overflow: 'hidden',
             display: 'flex',
-            flexDirection: 'column',
+            flexDirection: 'row',
             animation: 'ai-slideIn 0.3s ease-out',
           }}>
+            {/* Drag Handle */}
+            <div
+              onMouseDown={(e) => {
+                isDraggingRef.current = true;
+                dragStartRef.current = { x: e.clientX, width: panelWidth };
+                document.body.style.cursor = 'col-resize';
+                e.preventDefault();
+              }}
+              style={{
+                width: '6px',
+                backgroundColor: 'var(--theme-primary)',
+                cursor: 'col-resize',
+                flexShrink: 0,
+                opacity: 0.8,
+                transition: 'opacity 0.2s',
+              }}
+              onMouseEnter={(e) => e.target.style.opacity = 1}
+              onMouseLeave={(e) => e.target.style.opacity = 0.8}
+              title="Drag to resize, drag right to close"
+            />
+            {/* Panel Content Wrapper */}
+            <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                flex: 1,
+                minWidth: 0,
+            }}>
             {/* Panel header */}
             <div style={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -768,19 +929,21 @@ export default function TvInteractiveChart() {
                 style={{
                   background: 'none', border: 'none', color: 'var(--text-muted)',
                   cursor: 'pointer', fontSize: '16px', padding: '0 4px',
-                  fontFamily: 'Courier New, monospace', lineHeight: 1,
+                  fontFamily: 'var(--font-main)', lineHeight: 1,
                 }}
                 title="Close analysis"
               >✕</button>
             </div>
 
             {/* Panel body */}
-            <div style={{
+            <div className="ai-panel-body" style={{
               padding: '14px 16px',
               overflowY: 'auto',
-              fontSize: '12px',
+              overflowX: 'hidden',
+              wordBreak: 'break-word',
+              fontSize: '14px',
               lineHeight: '1.6',
-              color: 'var(--text-muted)',
+              color: 'var(--text-main)',
               flex: 1,
             }}>
               {analysisLoading && (
@@ -815,8 +978,36 @@ export default function TvInteractiveChart() {
               {!analysisLoading && !analysisError && analysisText && (
                 <div>{renderAnalysisText(analysisText)}</div>
               )}
+              {!analysisLoading && !analysisError && !analysisText && (
+                <div style={{ color: 'var(--text-muted)', textAlign: 'center', marginTop: '40px', fontSize: '13px' }}>
+                  No analysis available yet.<br/><br/>Click <strong>AI Analyze</strong> to generate one for the visible chart window.
+                </div>
+              )}
+            </div>
             </div>
           </div>
+        ) : (
+          <div
+            onMouseDown={(e) => {
+              isDraggingRef.current = true;
+              dragStartRef.current = { x: e.clientX, width: 0 };
+              document.body.style.cursor = 'col-resize';
+              e.preventDefault();
+            }}
+            style={{
+              width: '6px',
+              flexShrink: 0,
+              marginLeft: '10px',
+              backgroundColor: 'var(--theme-primary)',
+              borderRadius: '4px',
+              cursor: 'col-resize',
+              opacity: 0.7,
+              transition: 'opacity 0.2s',
+            }}
+            onMouseEnter={(e) => e.target.style.opacity = 1}
+            onMouseLeave={(e) => e.target.style.opacity = 0.7}
+            title="Drag left to open and resize"
+          />
         )}
       </div>
 
@@ -828,6 +1019,13 @@ export default function TvInteractiveChart() {
         @keyframes ai-slideIn {
           from { opacity: 0; transform: translateX(20px); }
           to   { opacity: 1; transform: translateX(0); }
+        }
+        .ai-panel-body::-webkit-scrollbar {
+          display: none;
+        }
+        .ai-panel-body {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
         }
       `}</style>
     </div>

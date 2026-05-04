@@ -3,6 +3,7 @@ import './App.css'
 import EntryVisual from './content/EntryVisual.jsx'
 import Reader from './content/Reader.jsx'
 import TvInteractiveChart from './content/tvInteractiveChart.jsx'
+import StrategyBuilder from './content/StrategyBuilder.jsx'
 import { useTheme } from './ThemeContext.jsx'
 
 // Define your tab components here - easy to add new ones!
@@ -10,12 +11,14 @@ const tabComponents = {
   entryVisual: EntryVisual,
   reader: Reader,
   tvInteractiveChart: TvInteractiveChart,
+  strategy: StrategyBuilder,
 }
 
 // Tab configuration - easy to modify and extend
 const initialTabs = [
   { id: 'entryVisual', name: '3D Donut', component: tabComponents.entryVisual },
   { id: 'tvInteractiveChart', name: 'Charts', component: tabComponents.tvInteractiveChart },
+  { id: 'strategy', name: 'Strategy', component: tabComponents.strategy },
   { id: 'reader', name: 'Reader', component: tabComponents.reader },
 ]
 
@@ -144,7 +147,7 @@ function App() {
               <button 
                 onClick={handleLogout}
                 className="tab"
-                style={{ backgroundColor: 'var(--surface-main)', color: 'var(--text-secondary)' }}
+                style={{ backgroundColor: 'var(--bg-panel)', color: 'var(--text-muted)' }}
               >
                 Logout ({user})
               </button>
@@ -152,7 +155,7 @@ function App() {
               <button 
                 onClick={() => setShowLogin(!showLogin)}
                 className="tab"
-                style={{ backgroundColor: showLogin ? 'var(--accent)' : 'var(--surface-main)', color: showLogin ? 'white' : 'var(--text-secondary)' }}
+                style={{ backgroundColor: showLogin ? 'var(--accent)' : 'var(--bg-panel)', color: showLogin ? 'white' : 'var(--text-muted)' }}
               >
                 Login
               </button>
@@ -164,7 +167,7 @@ function App() {
                 top: '100%',
                 right: '20px',
                 marginTop: '10px',
-                backgroundColor: 'var(--surface-main)',
+                backgroundColor: 'var(--bg-main)',
                 border: '1px solid var(--border-main)',
                 borderRadius: '8px',
                 padding: '16px',
@@ -227,7 +230,19 @@ function App() {
       </header>
       
       <div className="main-content">
-        {ActiveComponent && <ActiveComponent />}
+        {tabsList.map(tab => (
+          <div 
+            key={tab.id} 
+            style={{ 
+              display: activeTab === tab.id ? 'block' : 'none', 
+              height: '100%',
+              width: '100%',
+              overflow: 'hidden'
+            }}
+          >
+            <tab.component isActive={activeTab === tab.id} />
+          </div>
+        ))}
       </div>
     </div>
   )
