@@ -1,10 +1,61 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { createChart, ColorType, CrosshairMode, CandlestickSeries, HistogramSeries } from 'lightweight-charts';
+import { createChart, ColorType, CrosshairMode, CandlestickSeries, HistogramSeries, LineSeries } from 'lightweight-charts';
 import { api } from '../api.js';
 import { useTheme } from '../ThemeContext.jsx';
 
 const LOAD_CHUNK_MONTHS = 6;
 const LOAD_TRIGGER_BARS = 20;
+
+const EDUCATION_TOPICS = {
+  stockChart: {
+    title: 'What is a stock chart?',
+    body: "A stock chart is a visual record of how a stock's price changes over time. Each point or candle represents trading activity for a specific period, helping investors compare the opening price, closing price, highest price, lowest price, and volume. By reading the chart, you can quickly see whether the stock is trending upward, trending downward, or moving sideways.",
+  },
+  searchTicker: {
+    title: 'Search ticker',
+    body: 'A ticker is the short symbol used to identify a publicly traded stock or ETF. For example, AAPL represents Apple and MSFT represents Microsoft. Searching a ticker changes the chart to show that security.',
+  },
+  currentPrice: {
+    title: 'Current price',
+    body: 'The current price is the latest available trading price for the selected stock. The number below it shows how much the stock has moved compared with the previous close, both in dollars and percent.',
+  },
+  dayRange: {
+    title: 'Day range',
+    body: 'The day range shows the lowest and highest prices reached during the current trading day. A wide range usually means the stock moved a lot during the session.',
+  },
+  volume: {
+    title: 'Volume',
+    body: 'Volume is the number of shares traded during the selected period. Higher volume means more market participation and can make a price move more meaningful.',
+  },
+  marketCap: {
+    title: 'Market cap',
+    body: "Market capitalization is the total market value of the company's shares. It is calculated by multiplying the share price by the number of shares outstanding.",
+  },
+  peRatio: {
+    title: 'P/E ratio',
+    body: "The price-to-earnings ratio compares a company's stock price with its earnings per share. Investors often use it to judge whether a stock looks expensive or inexpensive relative to its profits.",
+  },
+  greenCandle: {
+    title: 'Green candle',
+    body: 'A green candle means the stock closed higher than it opened for that candle period. The candle body shows the open-to-close move, while the thin wick shows the high and low.',
+  },
+  redCandle: {
+    title: 'Red candle',
+    body: 'A red candle means the stock closed lower than it opened for that candle period. The candle body shows the open-to-close move, while the thin wick shows the high and low.',
+  },
+  sma20: {
+    title: 'SMA 20',
+    body: 'A simple moving average smooths price by averaging the last set number of closing prices. SMA 20 averages the last 20 candles and is often used to see the short-term trend.',
+  },
+  sma50: {
+    title: 'SMA 50',
+    body: 'SMA 50 averages the last 50 candles. Because it uses more data than SMA 20, it moves more slowly and helps show a broader trend.',
+  },
+  ema20: {
+    title: 'EMA 20',
+    body: 'An exponential moving average also smooths price, but it gives more weight to recent candles. EMA 20 reacts faster to new price movement than SMA 20.',
+  },
+};
 
 export default function TvInteractiveChart({ isActive = true }) {
   const [stockData, setStockData] = useState([]);
@@ -19,6 +70,14 @@ export default function TvInteractiveChart({ isActive = true }) {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [showEducation, setShowEducation] = useState(false);
+  const [selectedEducationTopic, setSelectedEducationTopic] = useState('stockChart');
+  const [educationPanelPosition, setEducationPanelPosition] = useState({ x: 24, y: 170 });
+  const [visibleIndicators, setVisibleIndicators] = useState({
+    sma20: true,
+    sma50: false,
+    ema20: false,
+  });
 
   // AI analysis state
   const [analysisText, setAnalysisText] = useState('');
@@ -38,9 +97,24 @@ export default function TvInteractiveChart({ isActive = true }) {
 
   const isDraggingRef = useRef(false);
   const dragStartRef = useRef({ x: 0, width: 0 });
+  const isEducationDraggingRef = useRef(false);
+  const educationDragStartRef = useRef({ mouseX: 0, mouseY: 0, panelX: 24, panelY: 170 });
 
   useEffect(() => {
     const handleMouseMove = (e) => {
+      if (isEducationDraggingRef.current) {
+        const nextX = educationDragStartRef.current.panelX + e.clientX - educationDragStartRef.current.mouseX;
+        const nextY = educationDragStartRef.current.panelY + e.clientY - educationDragStartRef.current.mouseY;
+        const maxX = Math.max(window.innerWidth - 340, 0);
+        const maxY = Math.max(window.innerHeight - 160, 0);
+
+        setEducationPanelPosition({
+          x: Math.min(Math.max(nextX, 8), maxX),
+          y: Math.min(Math.max(nextY, 8), maxY),
+        });
+        return;
+      }
+
       if (!isDraggingRef.current) return;
       const deltaX = dragStartRef.current.x - e.clientX; 
       const newWidth = dragStartRef.current.width + deltaX;
@@ -71,6 +145,11 @@ export default function TvInteractiveChart({ isActive = true }) {
       }
     };
     const handleMouseUp = () => {
+      if (isEducationDraggingRef.current) {
+        isEducationDraggingRef.current = false;
+        document.body.style.cursor = 'default';
+      }
+
       if (isDraggingRef.current) {
         isDraggingRef.current = false;
         document.body.style.cursor = 'default';
@@ -107,6 +186,7 @@ export default function TvInteractiveChart({ isActive = true }) {
   const chartRef = useRef(null);
   const candleSeriesRef = useRef(null);
   const volumeSeriesRef = useRef(null);
+  const indicatorSeriesRef = useRef({});
   const isVisibleRef = useRef(true);
 
   // Dynamic loading refs — used inside the range-change callback to avoid stale closures
@@ -133,6 +213,38 @@ export default function TvInteractiveChart({ isActive = true }) {
   const themePrimaryRgb = getComputedStyle(document.documentElement).getPropertyValue('--theme-primary-rgb').trim() || '139, 169, 127';
   const themeSecondary = getComputedStyle(document.documentElement).getPropertyValue('--theme-secondary').trim() || '#FF5A5A';
   const themeSecondaryRgb = getComputedStyle(document.documentElement).getPropertyValue('--theme-secondary-rgb').trim() || '255, 90, 90';
+  const activeEducation = EDUCATION_TOPICS[selectedEducationTopic] || EDUCATION_TOPICS.stockChart;
+
+  const getEducationHighlightStyle = (topic) => {
+    if (!showEducation) return {};
+    const isSelected = selectedEducationTopic === topic;
+
+    return {
+      border: `1px solid ${isSelected ? 'var(--theme-primary)' : 'rgba(var(--theme-primary-rgb), 0.45)'}`,
+      boxShadow: isSelected
+        ? '0 0 0 2px rgba(var(--theme-primary-rgb), 0.25), 0 0 18px rgba(var(--theme-primary-rgb), 0.35)'
+        : '0 0 12px rgba(var(--theme-primary-rgb), 0.18)',
+      backgroundColor: isSelected ? 'rgba(var(--theme-primary-rgb), 0.12)' : undefined,
+      cursor: 'pointer',
+      borderRadius: '4px',
+      padding: '8px',
+      margin: '-8px',
+      transition: 'box-shadow 0.2s ease, border-color 0.2s ease, background-color 0.2s ease',
+    };
+  };
+
+  const selectEducationTopic = (topic) => {
+    if (!showEducation) return;
+    setSelectedEducationTopic(topic);
+  };
+
+  const toggleIndicator = (indicator) => {
+    setVisibleIndicators((current) => ({
+      ...current,
+      [indicator]: !current[indicator],
+    }));
+    selectEducationTopic(indicator);
+  };
 
   // --- Debounced search ---
   useEffect(() => {
@@ -332,6 +444,30 @@ export default function TvInteractiveChart({ isActive = true }) {
       });
       volumeSeriesRef.current.priceScale().applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
 
+      indicatorSeriesRef.current = {
+        sma20: chartRef.current.addSeries(LineSeries, {
+          color: '#f59e0b',
+          lineWidth: 2,
+          priceLineVisible: false,
+          lastValueVisible: false,
+          visible: visibleIndicators.sma20,
+        }),
+        sma50: chartRef.current.addSeries(LineSeries, {
+          color: '#3b82f6',
+          lineWidth: 2,
+          priceLineVisible: false,
+          lastValueVisible: false,
+          visible: visibleIndicators.sma50,
+        }),
+        ema20: chartRef.current.addSeries(LineSeries, {
+          color: '#a855f7',
+          lineWidth: 2,
+          priceLineVisible: false,
+          lastValueVisible: false,
+          visible: visibleIndicators.ema20,
+        }),
+      };
+
       // Subscribe: when user scrolls/zooms near the left edge, load more
       chartRef.current.timeScale().subscribeVisibleLogicalRangeChange((logicalRange) => {
         if (logicalRange && logicalRange.from < LOAD_TRIGGER_BARS) {
@@ -377,6 +513,14 @@ export default function TvInteractiveChart({ isActive = true }) {
     candleSeriesRef.current.setData(candleData);
     volumeSeriesRef.current.setData(volumeData);
 
+    const sortedStockData = [...stockData].sort((a, b) => a.date.localeCompare(b.date));
+    indicatorSeriesRef.current.sma20?.setData(calculateSMA(sortedStockData, 20));
+    indicatorSeriesRef.current.sma50?.setData(calculateSMA(sortedStockData, 50));
+    indicatorSeriesRef.current.ema20?.setData(calculateEMA(sortedStockData, 20));
+    indicatorSeriesRef.current.sma20?.applyOptions({ visible: visibleIndicators.sma20 });
+    indicatorSeriesRef.current.sma50?.applyOptions({ visible: visibleIndicators.sma50 });
+    indicatorSeriesRef.current.ema20?.applyOptions({ visible: visibleIndicators.ema20 });
+
     // Restore view position when prepending, or fit content on first load
     if (visibleRangeRef.current) {
       chartRef.current.timeScale().setVisibleRange(visibleRangeRef.current);
@@ -385,7 +529,7 @@ export default function TvInteractiveChart({ isActive = true }) {
       chartRef.current.timeScale().fitContent();
       initialFitDoneRef.current = true;
     }
-  }, [stockData, isActive]);
+  }, [stockData, isActive, visibleIndicators]);
 
   // --- Resize handler (uses ResizeObserver to react to container width changes) ---
   const chartRowRef = useRef(null);
@@ -451,6 +595,7 @@ export default function TvInteractiveChart({ isActive = true }) {
         chartRef.current = null;
         candleSeriesRef.current = null;
         volumeSeriesRef.current = null;
+        indicatorSeriesRef.current = {};
       }
     };
   }, []);
@@ -477,10 +622,53 @@ export default function TvInteractiveChart({ isActive = true }) {
       chartRef.current = null;
       candleSeriesRef.current = null;
       volumeSeriesRef.current = null;
+      indicatorSeriesRef.current = {};
     }
   }, [symbol]);
 
   // --- Helpers ---
+  const calculateSMA = (data, period) => {
+    const result = [];
+    let runningTotal = 0;
+
+    data.forEach((point, index) => {
+      runningTotal += point.price;
+      if (index >= period) runningTotal -= data[index - period].price;
+
+      if (index >= period - 1) {
+        result.push({
+          time: point.date,
+          value: Number((runningTotal / period).toFixed(2)),
+        });
+      }
+    });
+
+    return result;
+  };
+
+  const calculateEMA = (data, period) => {
+    if (data.length < period) return [];
+
+    const result = [];
+    const multiplier = 2 / (period + 1);
+    let ema = data.slice(0, period).reduce((sum, point) => sum + point.price, 0) / period;
+
+    result.push({
+      time: data[period - 1].date,
+      value: Number(ema.toFixed(2)),
+    });
+
+    for (let i = period; i < data.length; i += 1) {
+      ema = (data[i].price - ema) * multiplier + ema;
+      result.push({
+        time: data[i].date,
+        value: Number(ema.toFixed(2)),
+      });
+    }
+
+    return result;
+  };
+
   const formatMarketCap = (cap) => {
     if (cap >= 1e12) return `$${(cap / 1e12).toFixed(2)}T`;
     if (cap >= 1e9) return `$${(cap / 1e9).toFixed(2)}B`;
@@ -671,7 +859,13 @@ export default function TvInteractiveChart({ isActive = true }) {
               const trimmed = searchInput.trim().toUpperCase();
               if (trimmed) { setSymbol(trimmed); setSearchInput(''); setShowSuggestions(false); }
             }}
-            style={{ display: 'flex', gap: '0', alignItems: 'center' }}
+            onClick={() => selectEducationTopic('searchTicker')}
+            style={{
+              display: 'flex',
+              gap: '0',
+              alignItems: 'center',
+              ...getEducationHighlightStyle('searchTicker'),
+            }}
           >
             <div style={{ position: 'relative', display: 'flex' }}>
               <input
@@ -756,6 +950,63 @@ export default function TvInteractiveChart({ isActive = true }) {
               opacity: loading ? 0.6 : 1
             }}
           >{loading ? 'Loading...' : 'Refresh'}</button>
+
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '0 4px',
+            ...getEducationHighlightStyle(selectedEducationTopic.startsWith('sma') || selectedEducationTopic.startsWith('ema') ? selectedEducationTopic : 'sma20'),
+          }}>
+            {[
+              { id: 'sma20', label: 'SMA 20', color: '#f59e0b' },
+              { id: 'sma50', label: 'SMA 50', color: '#3b82f6' },
+              { id: 'ema20', label: 'EMA 20', color: '#a855f7' },
+            ].map((indicator) => (
+              <button
+                key={indicator.id}
+                type="button"
+                onClick={() => toggleIndicator(indicator.id)}
+                aria-pressed={visibleIndicators[indicator.id]}
+                style={{
+                  backgroundColor: visibleIndicators[indicator.id] ? indicator.color : 'var(--bg-main)',
+                  color: visibleIndicators[indicator.id] ? '#ffffff' : 'var(--text-main)',
+                  border: `2px solid ${visibleIndicators[indicator.id] ? indicator.color : 'var(--border-focus)'}`,
+                  padding: '6px 10px',
+                  fontFamily: 'var(--font-main)',
+                  fontSize: '12px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  textTransform: 'uppercase',
+                }}
+                title={`${visibleIndicators[indicator.id] ? 'Hide' : 'Show'} ${indicator.label}`}
+              >
+                {indicator.label}
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setShowEducation((current) => !current);
+              setSelectedEducationTopic('stockChart');
+            }}
+            aria-pressed={showEducation}
+            style={{
+              backgroundColor: showEducation ? 'var(--theme-primary)' : 'var(--bg-main)',
+              color: showEducation ? 'var(--bg-main)' : 'var(--text-main)',
+              border: `2px solid ${showEducation ? 'var(--theme-primary)' : 'var(--border-focus)'}`,
+              padding: '6px 12px',
+              fontFamily: 'var(--font-main)',
+              fontSize: '12px',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              textTransform: 'uppercase',
+            }}
+          >
+            Educate {showEducation ? 'On' : 'Off'}
+          </button>
         </div>
       </div>
 
@@ -763,9 +1014,13 @@ export default function TvInteractiveChart({ isActive = true }) {
       {realTimeData && (
         <div style={{
           display: 'flex', gap: '30px', marginBottom: '15px', padding: '12px 15px',
-          backgroundColor: 'var(--bg-panel)', border: '1px solid var(--border-main)'
+          backgroundColor: 'var(--bg-panel)', border: '1px solid var(--border-main)',
+          flexWrap: 'wrap'
         }}>
-          <div>
+          <div
+            onClick={() => selectEducationTopic('currentPrice')}
+            style={getEducationHighlightStyle('currentPrice')}
+          >
             <div style={{ color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase' }}>Current Price</div>
             <div style={{ color: realTimeData.change >= 0 ? 'var(--chart-up)' : 'var(--chart-down)', fontSize: '24px', fontWeight: 'bold' }}>
               ${realTimeData.current_price.toFixed(2)}
@@ -774,22 +1029,34 @@ export default function TvInteractiveChart({ isActive = true }) {
               {realTimeData.change >= 0 ? '+' : ''}{realTimeData.change.toFixed(2)} ({realTimeData.change_percent.toFixed(2)}%)
             </div>
           </div>
-          <div>
+          <div
+            onClick={() => selectEducationTopic('dayRange')}
+            style={getEducationHighlightStyle('dayRange')}
+          >
             <div style={{ color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase' }}>Day Range</div>
             <div style={{ fontSize: '14px' }}>${realTimeData.day_low} - ${realTimeData.day_high}</div>
           </div>
-          <div>
+          <div
+            onClick={() => selectEducationTopic('volume')}
+            style={getEducationHighlightStyle('volume')}
+          >
             <div style={{ color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase' }}>Volume</div>
             <div style={{ fontSize: '14px' }}>{formatVolume(realTimeData.volume)}</div>
           </div>
           {stockInfo?.market_cap > 0 && (
-            <div>
+            <div
+              onClick={() => selectEducationTopic('marketCap')}
+              style={getEducationHighlightStyle('marketCap')}
+            >
               <div style={{ color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase' }}>Market Cap</div>
               <div style={{ fontSize: '14px' }}>{formatMarketCap(stockInfo.market_cap)}</div>
             </div>
           )}
           {stockInfo?.pe_ratio && stockInfo.pe_ratio !== 'N/A' && (
-            <div>
+            <div
+              onClick={() => selectEducationTopic('peRatio')}
+              style={getEducationHighlightStyle('peRatio')}
+            >
               <div style={{ color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase' }}>P/E Ratio</div>
               <div style={{ fontSize: '14px' }}>{stockInfo.pe_ratio.toFixed(2)}</div>
             </div>
@@ -858,8 +1125,6 @@ export default function TvInteractiveChart({ isActive = true }) {
         </div>
       )}
 
-
-
       {/* Chart + Analysis Row */}
       <div ref={chartRowRef} style={{
         display: 'flex',
@@ -870,7 +1135,6 @@ export default function TvInteractiveChart({ isActive = true }) {
       }}>
         {/* Chart Container */}
         <div
-          ref={chartContainerRef}
           style={{
             flex: '1 1 0%',
             minWidth: 0,
@@ -879,7 +1143,128 @@ export default function TvInteractiveChart({ isActive = true }) {
             backgroundColor: 'var(--bg-main)',
             border: '1px solid var(--border-main)',
           }}
-        />
+        >
+          <div
+            ref={chartContainerRef}
+            style={{
+              position: 'absolute',
+              inset: 0,
+            }}
+          />
+          {showEducation && (
+            <div style={{
+              position: 'absolute',
+              top: '14px',
+              left: '14px',
+              zIndex: 20,
+              display: 'flex',
+              gap: '10px',
+              pointerEvents: 'auto',
+            }}>
+              <button
+                type="button"
+                onClick={() => selectEducationTopic('greenCandle')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 10px',
+                  border: selectedEducationTopic === 'greenCandle'
+                    ? '1px solid var(--theme-primary)'
+                    : '1px solid rgba(var(--theme-primary-rgb), 0.55)',
+                  backgroundColor: selectedEducationTopic === 'greenCandle'
+                    ? 'rgba(var(--theme-primary-rgb), 0.18)'
+                    : 'var(--bg-panel)',
+                  color: 'var(--text-main)',
+                  boxShadow: selectedEducationTopic === 'greenCandle'
+                    ? '0 0 0 2px rgba(var(--theme-primary-rgb), 0.25), 0 0 18px rgba(var(--theme-primary-rgb), 0.35)'
+                    : '0 0 12px rgba(var(--theme-primary-rgb), 0.2)',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-main)',
+                  fontSize: '12px',
+                  fontWeight: 'bold',
+                }}
+              >
+                <span style={{
+                  position: 'relative',
+                  display: 'inline-block',
+                  width: '12px',
+                  height: '28px',
+                }}>
+                  <span style={{
+                    position: 'absolute',
+                    left: '5px',
+                    top: 0,
+                    width: '2px',
+                    height: '28px',
+                    backgroundColor: 'var(--theme-primary)',
+                  }} />
+                  <span style={{
+                    position: 'absolute',
+                    left: '1px',
+                    top: '8px',
+                    width: '10px',
+                    height: '14px',
+                    backgroundColor: 'var(--theme-primary)',
+                  }} />
+                </span>
+                Green Candle
+              </button>
+
+              <button
+                type="button"
+                onClick={() => selectEducationTopic('redCandle')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 10px',
+                  border: selectedEducationTopic === 'redCandle'
+                    ? '1px solid var(--theme-secondary)'
+                    : '1px solid rgba(var(--theme-secondary-rgb), 0.55)',
+                  backgroundColor: selectedEducationTopic === 'redCandle'
+                    ? 'rgba(var(--theme-secondary-rgb), 0.16)'
+                    : 'var(--bg-panel)',
+                  color: 'var(--text-main)',
+                  boxShadow: selectedEducationTopic === 'redCandle'
+                    ? '0 0 0 2px rgba(var(--theme-secondary-rgb), 0.22), 0 0 18px rgba(var(--theme-secondary-rgb), 0.32)'
+                    : '0 0 12px rgba(var(--theme-secondary-rgb), 0.2)',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-main)',
+                  fontSize: '12px',
+                  fontWeight: 'bold',
+                }}
+              >
+                <span style={{
+                  position: 'relative',
+                  display: 'inline-block',
+                  width: '12px',
+                  height: '28px',
+                }}>
+                  <span style={{
+                    position: 'absolute',
+                    left: '5px',
+                    top: 0,
+                    width: '2px',
+                    height: '28px',
+                    backgroundColor: 'var(--theme-secondary)',
+                  }} />
+                  <span style={{
+                    position: 'absolute',
+                    left: '1px',
+                    top: '8px',
+                    width: '10px',
+                    height: '14px',
+                    backgroundColor: 'var(--theme-secondary)',
+                  }} />
+                </span>
+                Red Candle
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* AI Analysis Panel — right side */}
         {showAnalysis ? (
@@ -1035,6 +1420,87 @@ export default function TvInteractiveChart({ isActive = true }) {
           />
         )}
       </div>
+
+      {showEducation && (
+        <div style={{
+          position: 'fixed',
+          left: `${educationPanelPosition.x}px`,
+          top: `${educationPanelPosition.y}px`,
+          width: '320px',
+          maxWidth: 'calc(100vw - 24px)',
+          maxHeight: '45vh',
+          zIndex: 2000,
+          backgroundColor: 'var(--bg-panel)',
+          border: '1px solid var(--border-main)',
+          borderLeft: '4px solid var(--theme-primary)',
+          borderRadius: '4px',
+          boxShadow: isDark
+            ? '0 16px 40px rgba(0, 0, 0, 0.55)'
+            : '0 16px 40px rgba(0, 0, 0, 0.18)',
+          color: 'var(--text-main)',
+          overflow: 'hidden',
+        }}>
+          <div
+            onMouseDown={(e) => {
+              isEducationDraggingRef.current = true;
+              educationDragStartRef.current = {
+                mouseX: e.clientX,
+                mouseY: e.clientY,
+                panelX: educationPanelPosition.x,
+                panelY: educationPanelPosition.y,
+              };
+              document.body.style.cursor = 'move';
+              e.preventDefault();
+            }}
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '10px 12px',
+              borderBottom: '1px solid var(--border-main)',
+              cursor: 'move',
+              userSelect: 'none',
+              backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
+            }}
+            title="Drag to move"
+          >
+            <h3 style={{ margin: 0, fontSize: '14px' }}>{activeEducation.title}</h3>
+            <button
+              type="button"
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={() => setShowEducation(false)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'var(--text-muted)',
+                cursor: 'pointer',
+                fontFamily: 'var(--font-main)',
+                fontSize: '16px',
+                lineHeight: 1,
+                padding: '2px 4px',
+              }}
+              title="Close education panel"
+            >
+              x
+            </button>
+          </div>
+          <div style={{
+            padding: '12px 14px',
+            overflowY: 'auto',
+            maxHeight: 'calc(45vh - 42px)',
+          }}>
+            <p style={{
+              margin: 0,
+              color: 'var(--text-muted)',
+              fontSize: '13px',
+              lineHeight: 1.6,
+            }}>
+              {activeEducation.body}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Keyframe animations */}
       <style>{`
