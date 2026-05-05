@@ -12,6 +12,8 @@ body {
   overflow: hidden;
   transition: background-color 0.3s ease, color 0.3s ease;
   font-weight: 600;
+  line-height: 1.6;
+  letter-spacing: 0.02em;
 }
 
 .app {
@@ -44,8 +46,7 @@ body {
   font-weight: bold;
   cursor: pointer;
   transition: background-color 0.2s ease, color 0.2s ease;
-  text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 0.03em;
 }
 
 .tab:hover {

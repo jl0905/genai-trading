@@ -70,4 +70,14 @@ export const api = {
     });
     return response.json();
   },
+
+  // Strategy Builder backtesting — runs rule-based simulation on real OHLCV data
+  runBacktest: async (payload) => {
+    const response = await fetch(`${API_BASE_URL}/backtest`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return response.json();
+  },
 };
