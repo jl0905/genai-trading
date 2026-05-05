@@ -18,6 +18,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "scripts"))
 from stockdata import get_stock_data, get_multiple_stocks, get_stock_data_range
 from googlefin import get_bitcoin_price
 from chart_analyzer import analyze_chart
+from backtest import run_backtest
 
 app = FastAPI(title="GenAI Trading Dashboard API")
 
@@ -172,3 +173,29 @@ def analyze_chart_endpoint(params: AnalyzeChartParams):
         data=data_dicts,
     )
     return result
+
+
+class BacktestRule(BaseModel):
+    indicator: str
+    condition: str
+    value: str
+    action: str
+
+class BacktestParams(BaseModel):
+    symbol: str
+    start_date: str
+    end_date: str
+    initial_capital: float = 10_000.0
+    rules: List[BacktestRule]
+
+@app.post("/api/backtest")
+def run_backtest_endpoint(params: BacktestParams):
+    """Fetch OHLCV for the given symbol/range and run the rule-based backtest engine."""
+    ohlcv = get_stock_data_range(params.symbol, params.start_date, params.end_date)
+    if not ohlcv.get("success"):
+        return {"success": False, "error": ohlcv.get("error", "Failed to fetch stock data")}
+    if not ohlcv.get("historical"):
+        return {"success": False, "error": f"No data found for {params.symbol} in the given date range."}
+
+    rules_dicts = [r.model_dump() for r in params.rules]
+    return run_backtest(ohlcv["historical"], rules_dicts, params.initial_capital)

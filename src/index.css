@@ -5,8 +5,10 @@
   --theme-primary-rgb: 139, 169, 127;
   --theme-secondary: #FF5A5A;
   --theme-secondary-rgb: 255, 90, 90;
-  
-  --font-main: 'Courier New', Courier, monospace;
+
+  --font-main: 'IBM Plex Sans', sans-serif;
+  /* --font-main: 'Viga', sans-serif; */
+  /* --font-main: 'Courier New', Courier, monospace; */
 
   --bg-main: #ffffff;
   --bg-panel: #f3f4f6;

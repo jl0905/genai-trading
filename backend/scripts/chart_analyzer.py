@@ -136,7 +136,7 @@ def analyze_chart(symbol: str, company_name: str, sector: str,
         )
 
         response = client.chat.completions.create(
-            model="openai/gpt-oss-120b:free",
+            model="google/gemma-4-31b-it:free",#"openai/gpt-oss-120b:free",
             messages=[
                 {"role": "user", "content": f"{system_prompt}\n\n{user_prompt}"}
             ],

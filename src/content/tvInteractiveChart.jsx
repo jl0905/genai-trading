@@ -274,6 +274,15 @@ export default function TvInteractiveChart({ isActive = true }) {
     return () => clearInterval(interval);
   }, [fetchInitialData, backgroundRefresh]);
 
+  // Auto-retry every 1.5 seconds when there is a load error
+  useEffect(() => {
+    if (!error) return;
+    const retryInterval = setInterval(() => {
+      fetchInitialData();
+    }, 1500);
+    return () => clearInterval(retryInterval);
+  }, [error, fetchInitialData]);
+
   // --- Theme hot-swap on existing chart ---
   useEffect(() => {
     if (!chartRef.current) return;
@@ -613,10 +622,26 @@ export default function TvInteractiveChart({ isActive = true }) {
   if (error && stockData.length === 0) {
     return (
       <div style={{
-        width: '100%', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        backgroundColor: 'var(--bg-main)', color: 'var(--chart-down)', fontFamily: 'var(--font-main)'
+        width: '100%', height: '100vh', display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', gap: '14px',
+        backgroundColor: 'var(--bg-main)', fontFamily: 'var(--font-main)'
       }}>
-        <div>Error: {error}</div>
+        <div style={{ color: 'var(--chart-down)', fontSize: '14px' }}>Error: {error}</div>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '8px',
+          color: 'var(--text-muted)', fontSize: '13px'
+        }}>
+          <span style={{
+            display: 'inline-block',
+            width: '14px', height: '14px',
+            border: '2px solid var(--text-muted)',
+            borderTopColor: 'var(--theme-primary)',
+            borderRadius: '50%',
+            animation: 'tv-spin 0.9s linear infinite',
+          }} />
+          Retrying...
+          <style>{`@keyframes tv-spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
       </div>
     );
   }
