@@ -80,4 +80,24 @@ export const api = {
     });
     return response.json();
   },
+
+  getAlpacaPaperDashboard: async () => {
+    const response = await fetch(`${API_BASE_URL}/alpaca/paper`);
+    return response.json();
+  },
+
+  submitAlpacaPaperOrder: async (payload) => {
+    const response = await fetch(`${API_BASE_URL}/alpaca/paper/order`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return response.json();
+  },
+
+  getAlpacaVolumeProfile: async (symbol, start, end, feed = 'iex', bins = 24) => {
+    const params = new URLSearchParams({ symbol, start, end, feed, bins: String(bins) });
+    const response = await fetch(`${API_BASE_URL}/alpaca/volume-profile?${params}`);
+    return response.json();
+  },
 };

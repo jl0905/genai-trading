@@ -106,6 +106,7 @@ export default function TvInteractiveChart({ isActive = true }) {
   const [visibleRangeInfo, setVisibleRangeInfo] = useState(null);
   const [priceGaugeMarkers, setPriceGaugeMarkers] = useState(null);
   const [volumeProfileBars, setVolumeProfileBars] = useState([]);
+  const [volumeProfileSource, setVolumeProfileSource] = useState('');
 
   const showAnalysisRef = useRef(false);
   useEffect(() => { showAnalysisRef.current = showAnalysis; }, [showAnalysis]);
@@ -258,6 +259,11 @@ export default function TvInteractiveChart({ isActive = true }) {
     setSelectedEducationTopic(topic);
   };
 
+  const openEducationTopic = useCallback((topic) => {
+    setShowEducation(true);
+    setSelectedEducationTopic(topic);
+  }, []);
+
   const toggleIndicator = (indicator) => {
     setVisibleIndicators((current) => ({
       ...current,
@@ -322,9 +328,10 @@ export default function TvInteractiveChart({ isActive = true }) {
     });
   }, []);
 
-  const updateVolumeProfile = useCallback((timeRange = null) => {
+  const updateVolumeProfile = useCallback(async (timeRange = null) => {
     if (!visibleIndicators.vrvp || !candleSeriesRef.current || stockDataRef.current.length === 0) {
       setVolumeProfileBars([]);
+      setVolumeProfileSource('');
       return;
     }
 
@@ -335,6 +342,7 @@ export default function TvInteractiveChart({ isActive = true }) {
 
     if (visibleData.length === 0) {
       setVolumeProfileBars([]);
+      setVolumeProfileSource('');
       return;
     }
 
@@ -344,10 +352,61 @@ export default function TvInteractiveChart({ isActive = true }) {
 
     if (!Number.isFinite(priceRange) || priceRange <= 0) {
       setVolumeProfileBars([]);
+      setVolumeProfileSource('');
       return;
     }
 
     const binCount = 24;
+    const profileWidth = Math.min(190, Math.max(110, (chartContainerRef.current?.clientWidth || 700) * 0.22));
+    const renderBins = (bins, sourceLabel) => {
+      const maxVolume = Math.max(...bins.map(bin => Number(bin.volume) || 0));
+      if (!Number.isFinite(maxVolume) || maxVolume <= 0) {
+        setVolumeProfileBars([]);
+        setVolumeProfileSource('');
+        return false;
+      }
+
+      const bars = bins
+        .map((bin) => {
+          const topY = candleSeriesRef.current.priceToCoordinate(Number(bin.high));
+          const bottomY = candleSeriesRef.current.priceToCoordinate(Number(bin.low));
+          if (topY == null || bottomY == null) return null;
+
+          const volume = Number(bin.volume) || 0;
+          return {
+            top: Math.min(topY, bottomY),
+            height: Math.max(Math.abs(bottomY - topY), 3),
+            width: Math.max((volume / maxVolume) * profileWidth, 2),
+            volume,
+            price: (Number(bin.high) + Number(bin.low)) / 2,
+            isPointOfControl: volume === maxVolume,
+          };
+        })
+        .filter(Boolean);
+
+      setVolumeProfileBars(bars);
+      setVolumeProfileSource(sourceLabel);
+      return bars.length > 0;
+    };
+
+    if (rangeDates) {
+      try {
+        const alpacaProfile = await api.getAlpacaVolumeProfile(
+          symbolRef.current,
+          rangeDates.from,
+          rangeDates.to,
+          'iex',
+          binCount
+        );
+        const alpacaBins = alpacaProfile?.data?.bars || [];
+        if (alpacaProfile.success && alpacaBins.length > 0 && renderBins(alpacaBins, alpacaProfile.data.source || 'alpaca')) {
+          return;
+        }
+      } catch (err) {
+        console.warn('Alpaca volume profile unavailable, using local estimate.', err);
+      }
+    }
+
     const binSize = priceRange / binCount;
     const bins = Array.from({ length: binCount }, (_, index) => ({
       low: visibleLow + index * binSize,
@@ -368,31 +427,7 @@ export default function TvInteractiveChart({ isActive = true }) {
       }
     });
 
-    const maxVolume = Math.max(...bins.map(bin => bin.volume));
-    if (!Number.isFinite(maxVolume) || maxVolume <= 0) {
-      setVolumeProfileBars([]);
-      return;
-    }
-
-    const profileWidth = Math.min(190, Math.max(110, (chartContainerRef.current?.clientWidth || 700) * 0.22));
-    const bars = bins
-      .map((bin) => {
-        const topY = candleSeriesRef.current.priceToCoordinate(bin.high);
-        const bottomY = candleSeriesRef.current.priceToCoordinate(bin.low);
-        if (topY == null || bottomY == null) return null;
-
-        return {
-          top: Math.min(topY, bottomY),
-          height: Math.max(Math.abs(bottomY - topY), 3),
-          width: Math.max((bin.volume / maxVolume) * profileWidth, 2),
-          volume: bin.volume,
-          price: (bin.high + bin.low) / 2,
-          isPointOfControl: bin.volume === maxVolume,
-        };
-      })
-      .filter(Boolean);
-
-    setVolumeProfileBars(bars);
+    renderBins(bins, 'local_daily_estimate');
   }, [visibleIndicators.vrvp]);
 
   // --- Debounced search ---
@@ -645,6 +680,21 @@ export default function TvInteractiveChart({ isActive = true }) {
           }
         }, 50);
       });
+
+      chartRef.current.subscribeClick((param) => {
+        if (!param?.point) return;
+
+        const chartHeight = chartContainerRef.current?.clientHeight || 0;
+        if (chartHeight > 0 && param.point.y > chartHeight * 0.76) {
+          openEducationTopic('volume');
+          return;
+        }
+
+        const candle = param.seriesData?.get(candleSeriesRef.current);
+        if (!candle) return;
+
+        openEducationTopic(candle.close >= candle.open ? 'greenCandle' : 'redCandle');
+      });
     }
 
     const candleData = stockData
@@ -778,6 +828,7 @@ export default function TvInteractiveChart({ isActive = true }) {
     setVisibleRangeInfo(null);
     setPriceGaugeMarkers(null);
     setVolumeProfileBars([]);
+    setVolumeProfileSource('');
 
     if (chartRef.current) {
       chartRef.current.remove();
@@ -1382,7 +1433,7 @@ export default function TvInteractiveChart({ isActive = true }) {
               bottom: 0,
               width: '210px',
               zIndex: 14,
-              pointerEvents: 'none',
+              pointerEvents: 'auto',
             }}>
               <div style={{
                 position: 'absolute',
@@ -1396,13 +1447,17 @@ export default function TvInteractiveChart({ isActive = true }) {
                 fontSize: '11px',
                 fontWeight: 'bold',
                 borderRadius: '3px',
-              }}>
-                VRVP
+                cursor: 'pointer',
+              }}
+                onClick={() => openEducationTopic('vrvp')}
+              >
+                VRVP{volumeProfileSource ? ` (${volumeProfileSource.replace('alpaca_', '').replaceAll('_', ' ')})` : ''}
               </div>
               {volumeProfileBars.map((bar, index) => (
                 <div
                   key={`${bar.price}-${index}`}
-                  title={`Approx volume near $${bar.price.toFixed(2)}: ${formatVolume(bar.volume)}`}
+                  onClick={() => openEducationTopic('vrvp')}
+                  title={`${volumeProfileSource.startsWith('alpaca') ? 'Alpaca' : 'Approx'} volume near $${bar.price.toFixed(2)}: ${formatVolume(bar.volume)}`}
                   style={{
                     position: 'absolute',
                     right: 0,
@@ -1416,6 +1471,7 @@ export default function TvInteractiveChart({ isActive = true }) {
                       ? '1px solid rgba(var(--theme-primary-rgb), 0.9)'
                       : '1px solid rgba(var(--theme-primary-rgb), 0.16)',
                     borderRadius: '2px 0 0 2px',
+                    cursor: 'pointer',
                   }}
                 />
               ))}

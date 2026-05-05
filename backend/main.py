@@ -19,6 +19,7 @@ from stockdata import get_stock_data, get_multiple_stocks, get_stock_data_range
 from googlefin import get_bitcoin_price
 from chart_analyzer import analyze_chart
 from backtest import run_backtest
+from alpaca_config import get_paper_dashboard, submit_paper_order, get_volume_profile
 
 app = FastAPI(title="GenAI Trading Dashboard API")
 
@@ -188,6 +189,13 @@ class BacktestParams(BaseModel):
     initial_capital: float = 10_000.0
     rules: List[BacktestRule]
 
+class PaperOrderParams(BaseModel):
+    symbol: str
+    qty: float
+    side: str
+    order_type: str = "market"
+    time_in_force: str = "day"
+
 @app.post("/api/backtest")
 def run_backtest_endpoint(params: BacktestParams):
     """Fetch OHLCV for the given symbol/range and run the rule-based backtest engine."""
@@ -199,3 +207,27 @@ def run_backtest_endpoint(params: BacktestParams):
 
     rules_dicts = [r.model_dump() for r in params.rules]
     return run_backtest(ohlcv["historical"], rules_dicts, params.initial_capital)
+
+@app.get("/api/alpaca/paper")
+def get_alpaca_paper_dashboard():
+    return get_paper_dashboard()
+
+@app.post("/api/alpaca/paper/order")
+def create_alpaca_paper_order(params: PaperOrderParams):
+    return submit_paper_order(
+        symbol=params.symbol,
+        qty=params.qty,
+        side=params.side,
+        order_type=params.order_type,
+        time_in_force=params.time_in_force,
+    )
+
+@app.get("/api/alpaca/volume-profile")
+def get_alpaca_volume_profile(
+    symbol: str,
+    start: str = None,
+    end: str = None,
+    feed: str = "iex",
+    bins: int = 24,
+):
+    return get_volume_profile(symbol=symbol, start=start, end=end, feed=feed, bins=bins)
