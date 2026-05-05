@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { createChart, ColorType, AreaSeries } from 'lightweight-charts';
 import { useTheme } from '../ThemeContext';
 import { api } from '../api.js';
 
@@ -21,21 +22,7 @@ const fmtCurrency = (n) =>
 const fmtPct = (n, alwaysSign = true) =>
   `${alwaysSign && n >= 0 ? '+' : ''}${n.toFixed(2)}%`;
 
-// Build the SVG polyline path string from an equity curve array
-const buildEquityPath = (curve, w, h, padV = 20) => {
-  if (!curve || curve.length < 2) return '';
-  const values = curve.map((p) => p.equity);
-  const minV = Math.min(...values);
-  const maxV = Math.max(...values);
-  const range = maxV - minV || 1;
-  return curve
-    .map((p, i) => {
-      const x = (i / (curve.length - 1)) * w;
-      const y = h - padV - ((p.equity - minV) / range) * (h - padV * 2);
-      return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`;
-    })
-    .join(' ');
-};
+
 
 // ---------------------------------------------------------------------------
 // Sub-components
@@ -60,45 +47,96 @@ function StatCard({ label, value, color, large = false }) {
 }
 
 function EquityCurve({ curve }) {
-  const W = 800;
-  const H = 220;
-  const path = buildEquityPath(curve, W, H);
-  const areaPath = path ? `${path} L ${W} ${H} L 0 ${H} Z` : '';
+  const containerRef = useRef(null);
+  const chartRef = useRef(null);
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
 
   const values = curve.map((p) => p.equity);
   const isProfit = values[values.length - 1] >= values[0];
-  const lineColor = isProfit ? 'var(--theme-primary)' : 'var(--theme-secondary)';
-  const startPct  = isProfit ? '0.35' : '0.35';
 
-  // Axis labels
-  const minV = Math.min(...values);
-  const maxV = Math.max(...values);
+  // Resolve CSS variable colors for lightweight-charts (it needs raw hex/rgb)
+  const getColor = (varName) => {
+    const root = document.documentElement;
+    return getComputedStyle(root).getPropertyValue(varName).trim();
+  };
+
+  useEffect(() => {
+    if (!containerRef.current || curve.length < 2) return;
+
+    const lineColor = getColor(isProfit ? '--theme-primary' : '--theme-secondary');
+    const bgColor = getColor('--bg-main');
+    const textColor = getColor('--text-muted');
+    const gridColor = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+    const borderColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
+
+    // Create chart
+    const chart = createChart(containerRef.current, {
+      layout: {
+        background: { type: ColorType.Solid, color: bgColor },
+        textColor: textColor,
+        fontFamily: 'inherit',
+        fontSize: 11,
+      },
+      grid: {
+        vertLines: { color: gridColor },
+        horzLines: { color: gridColor },
+      },
+      rightPriceScale: {
+        borderColor: borderColor,
+        scaleMargins: { top: 0.08, bottom: 0.08 },
+      },
+      timeScale: {
+        borderColor: borderColor,
+        timeVisible: false,
+      },
+      crosshair: {
+        vertLine: { color: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)' },
+        horzLine: { color: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)' },
+      },
+      handleScroll: { vertTouchDrag: false },
+    });
+
+    const areaSeries = chart.addSeries(AreaSeries, {
+      lineColor: lineColor,
+      topColor: lineColor + '66',
+      bottomColor: lineColor + '08',
+      lineWidth: 2,
+      priceFormat: {
+        type: 'custom',
+        formatter: (price) => '$' + price.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }),
+      },
+      crosshairMarkerRadius: 4,
+    });
+
+    const data = curve
+      .map((p) => ({ time: p.date, value: p.equity }))
+      .sort((a, b) => (a.time > b.time ? 1 : -1));
+
+    areaSeries.setData(data);
+    chart.timeScale().fitContent();
+    chartRef.current = chart;
+
+    // Responsive resize
+    const ro = new ResizeObserver(() => {
+      if (chartRef.current && containerRef.current) {
+        chartRef.current.applyOptions({ width: containerRef.current.clientWidth });
+      }
+    });
+    ro.observe(containerRef.current);
+
+    return () => {
+      ro.disconnect();
+      chart.remove();
+      chartRef.current = null;
+    };
+  }, [curve, isProfit, isDark]);
 
   return (
-    <div style={{ position: 'relative', width: '100%', flex: 1, minHeight: '180px' }}>
-      {/* Y-axis labels */}
-      <div style={{ position: 'absolute', top: 0, left: 0, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', paddingBlock: '20px', pointerEvents: 'none' }}>
-        {[maxV, (maxV + minV) / 2, minV].map((v, i) => (
-          <span key={i} style={{ fontSize: '10px', color: 'var(--text-muted)', paddingRight: '4px' }}>
-            {fmtCurrency(v)}
-          </span>
-        ))}
-      </div>
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        preserveAspectRatio="none"
-        style={{ width: '100%', height: '100%', display: 'block' }}
-      >
-        <defs>
-          <linearGradient id="eqGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={lineColor} stopOpacity={startPct} />
-            <stop offset="100%" stopColor={lineColor} stopOpacity="0.02" />
-          </linearGradient>
-        </defs>
-        {areaPath && <path d={areaPath} fill="url(#eqGradient)" />}
-        {path && <path d={path} fill="none" stroke={lineColor} strokeWidth="2.5" strokeLinejoin="round" />}
-      </svg>
-    </div>
+    <div
+      ref={containerRef}
+      style={{ width: '100%', height: '220px' }}
+    />
   );
 }
 
@@ -177,6 +215,9 @@ const StrategyBuilder = () => {
   const [isBacktesting, setIsBacktesting] = useState(false);
   const [results, setResults] = useState(null);
   const [backtestError, setBacktestError] = useState(null);
+  
+  const requestRef = useRef(0);
+  const debounceRef = useRef(null);
 
   // ---------------------------------------------------------------------------
   // Rule CRUD
@@ -191,10 +232,19 @@ const StrategyBuilder = () => {
   const updateRule = (id, field, value) =>
     setRules(rules.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
 
+  const randomizeRules = () => {
+    const getRandom = (arr) => arr[Math.floor(Math.random() * arr.length)];
+    setRules([
+      { id: Date.now(), indicator: getRandom(INDICATOR_OPTIONS), condition: getRandom(CONDITIONS), value: getRandom(INDICATOR_OPTIONS), action: 'Buy' },
+      { id: Date.now() + 1, indicator: getRandom(INDICATOR_OPTIONS), condition: getRandom(CONDITIONS), value: getRandom(INDICATOR_OPTIONS), action: 'Sell' },
+    ]);
+  };
+
   // ---------------------------------------------------------------------------
   // Backtest
   // ---------------------------------------------------------------------------
-  const runBacktest = async () => {
+  const runBacktest = useCallback(async () => {
+    const currentRequestId = ++requestRef.current;
     setIsBacktesting(true);
     setResults(null);
     setBacktestError(null);
@@ -211,17 +261,36 @@ const StrategyBuilder = () => {
       };
 
       const data = await api.runBacktest(payload);
+      
+      if (currentRequestId !== requestRef.current) return;
+
       if (data.success) {
         setResults(data);
       } else {
         setBacktestError(data.error || 'Backtest failed with an unknown error.');
       }
     } catch (err) {
+      if (currentRequestId !== requestRef.current) return;
       setBacktestError(err.message || 'Network error — is the backend running?');
     } finally {
-      setIsBacktesting(false);
+      if (currentRequestId === requestRef.current) {
+        setIsBacktesting(false);
+      }
     }
-  };
+  }, [rules, settings]);
+
+  useEffect(() => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
+    debounceRef.current = setTimeout(() => {
+      if (settings.symbol.trim() !== '') {
+        runBacktest();
+      }
+    }, 600); // 600ms debounce
+
+    return () => clearTimeout(debounceRef.current);
+  }, [runBacktest, settings.symbol]); // the dependency array ensures it runs when rules or settings change because runBacktest is wrapped in useCallback on them.
 
   // ---------------------------------------------------------------------------
   // Derived display values
@@ -247,6 +316,13 @@ const StrategyBuilder = () => {
       backgroundColor: 'var(--bg-main)', color: 'var(--text-main)',
       border: '1px solid var(--border-main)', padding: '8px 12px', borderRadius: '6px',
       outline: 'none', width: '100%', fontFamily: 'inherit', fontSize: '0.875rem',
+    },
+    // select extends input with enough right padding to clear the native dropdown arrow
+    select: {
+      backgroundColor: 'var(--bg-main)', color: 'var(--text-main)',
+      border: '1px solid var(--border-main)', padding: '6px 28px 6px 8px', borderRadius: '6px',
+      outline: 'none', width: '100%', fontFamily: 'inherit', fontSize: '0.875rem',
+      cursor: 'pointer', appearance: 'auto',
     },
     btn: {
       backgroundColor: 'var(--theme-primary)', color: '#fff', border: 'none',
@@ -312,12 +388,21 @@ const StrategyBuilder = () => {
         {/* Rule Builder */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h3 style={{ margin: 0, fontSize: '1rem' }}>Trading Rules</h3>
-          <button
-            style={{ ...s.btn, backgroundColor: 'transparent', color: 'var(--theme-primary)', border: '1px solid var(--theme-primary)', padding: '5px 12px', fontSize: '0.82rem' }}
-            onClick={addRule}
-          >
-            + Add Rule
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              style={{ ...s.btn, backgroundColor: 'var(--text-main)', color: 'var(--bg-main)', border: '1px solid var(--text-main)', padding: '5px 12px', fontSize: '0.82rem' }}
+              onClick={randomizeRules}
+              title="Generate a random Buy/Sell strategy"
+            >
+              Randomize
+            </button>
+            <button
+              style={{ ...s.btn, backgroundColor: 'var(--text-main)', color: 'var(--bg-main)', border: '1px solid var(--text-main)', padding: '5px 12px', fontSize: '0.82rem' }}
+              onClick={addRule}
+            >
+              + Add Rule
+            </button>
+          </div>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -333,7 +418,7 @@ const StrategyBuilder = () => {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <strong style={{ color: 'var(--theme-primary)', fontSize: '0.82rem' }}>Rule {index + 1}</strong>
                     <button
-                      style={{ background: 'none', border: 'none', color: 'var(--theme-secondary)', cursor: 'pointer', fontSize: '1.1rem', padding: '0 4px', lineHeight: 1 }}
+                      style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.1rem', padding: '0 4px', lineHeight: 1 }}
                       onClick={() => removeRule(rule.id)}
                       title="Remove Rule"
                     >
@@ -346,7 +431,7 @@ const StrategyBuilder = () => {
 
                     {/* Indicator (left-hand side) */}
                     <select
-                      style={{ ...s.input, padding: '6px 8px', cursor: 'pointer' }}
+                      style={s.select}
                       value={rule.indicator}
                       onChange={(e) => updateRule(rule.id, 'indicator', e.target.value)}
                     >
@@ -355,7 +440,7 @@ const StrategyBuilder = () => {
 
                     {/* Condition */}
                     <select
-                      style={{ ...s.input, padding: '6px 8px', cursor: 'pointer' }}
+                      style={s.select}
                       value={rule.condition}
                       onChange={(e) => updateRule(rule.id, 'condition', e.target.value)}
                     >
@@ -365,7 +450,7 @@ const StrategyBuilder = () => {
                     {/* Value: indicator dropdown for cross conditions, text input otherwise */}
                     {isCrossCondition ? (
                       <select
-                        style={{ ...s.input, padding: '6px 8px', cursor: 'pointer' }}
+                        style={s.select}
                         value={rule.value}
                         onChange={(e) => updateRule(rule.id, 'value', e.target.value)}
                       >
@@ -385,7 +470,7 @@ const StrategyBuilder = () => {
                     {/* Action */}
                     <select
                       style={{
-                        ...s.input, padding: '6px 8px', cursor: 'pointer',
+                        ...s.select,
                         borderColor: rule.action === 'Buy' ? 'var(--theme-primary)' : rule.action === 'Sell' || rule.action === 'Close Position' ? 'var(--theme-secondary)' : 'var(--border-main)',
                         color: rule.action === 'Buy' ? 'var(--theme-primary)' : rule.action === 'Sell' || rule.action === 'Close Position' ? 'var(--theme-secondary)' : 'var(--text-main)',
                         fontWeight: 'bold',
@@ -457,9 +542,15 @@ const StrategyBuilder = () => {
             {/* Metric cards row 1 */}
             <div style={{ display: 'flex', gap: '12px' }}>
               <StatCard
-                label="Total Return"
+                label="Strategy Return"
                 value={fmtPct(metrics.total_return_pct)}
                 color={returnPositive ? 'var(--theme-primary)' : 'var(--theme-secondary)'}
+                large
+              />
+              <StatCard
+                label="Buy & Hold"
+                value={fmtPct(metrics.buy_and_hold_pct)}
+                color={metrics.buy_and_hold_pct >= 0 ? 'var(--theme-primary)' : 'var(--theme-secondary)'}
                 large
               />
               <StatCard
