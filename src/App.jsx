@@ -4,6 +4,7 @@ import EntryVisual from './content/EntryVisual.jsx'
 import Reader from './content/Reader.jsx'
 import TvInteractiveChart from './content/tvInteractiveChart.jsx'
 import StrategyBuilder from './content/StrategyBuilder.jsx'
+import PaperTrading from './content/PaperTrading.jsx'
 import { useTheme } from './ThemeContext.jsx'
 
 // Define your tab components here - easy to add new ones!
@@ -12,12 +13,14 @@ const tabComponents = {
   reader: Reader,
   tvInteractiveChart: TvInteractiveChart,
   strategy: StrategyBuilder,
+  paperTrading: PaperTrading,
 }
 
 // Tab configuration - easy to modify and extend
 const initialTabs = [
   { id: 'entryVisual', name: 'Home', component: tabComponents.entryVisual },
   { id: 'tvInteractiveChart', name: 'Charts', component: tabComponents.tvInteractiveChart },
+  { id: 'paperTrading', name: 'Paper', component: tabComponents.paperTrading },
   { id: 'strategy', name: 'Strategy', component: tabComponents.strategy },
   { id: 'reader', name: 'Reader', component: tabComponents.reader },
 ]
