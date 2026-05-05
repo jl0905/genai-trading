@@ -262,11 +262,13 @@ def run_backtest(
     total_return    = (final_equity / initial_capital - 1) * 100
     winning_trades  = [t for t in trades if t["pnl_pct"] > 0]
     win_rate        = (len(winning_trades) / len(trades) * 100) if trades else 0.0
+    buy_and_hold    = (closes[-1] / closes[0] - 1) * 100
 
     return {
         "success": True,
         "metrics": {
             "total_return_pct":  round(total_return, 2),
+            "buy_and_hold_pct":  round(buy_and_hold, 2),
             "win_rate_pct":      round(win_rate, 1),
             "total_trades":      len(trades),
             "max_drawdown_pct":  round(max_drawdown, 2),
