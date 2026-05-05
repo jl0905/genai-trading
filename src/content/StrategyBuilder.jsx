@@ -202,10 +202,7 @@ const StrategyBuilder = () => {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
-  const [rules, setRules] = useState([
-    { id: 1, indicator: 'SMA 50', condition: 'Crosses Above', value: 'SMA 200', action: 'Buy' },
-    { id: 2, indicator: 'SMA 50', condition: 'Crosses Below', value: 'SMA 200', action: 'Sell' },
-  ]);
+  const [rules, setRules] = useState([]);
   const [settings, setSettings] = useState({
     symbol: 'AAPL',
     capital: '10000',
@@ -283,6 +280,8 @@ const StrategyBuilder = () => {
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
     }
+    // Don't auto-run if there are no rules defined
+    if (rules.length === 0) return;
     debounceRef.current = setTimeout(() => {
       if (settings.symbol.trim() !== '') {
         runBacktest();
@@ -489,11 +488,11 @@ const StrategyBuilder = () => {
 
         <div style={{ marginTop: 'auto', paddingTop: '16px' }}>
           <button
-            style={{ ...s.btn, width: '100%', fontSize: '1rem', padding: '13px', opacity: isBacktesting ? 0.7 : 1 }}
+            style={{ ...s.btn, width: '100%', fontSize: '1rem', padding: '13px', opacity: isBacktesting || rules.length === 0 ? 0.7 : 1 }}
             onClick={runBacktest}
-            disabled={isBacktesting}
+            disabled={isBacktesting || rules.length === 0}
           >
-            {isBacktesting ? `Running Backtest on ${settings.symbol}…` : '▶  Run Backtest'}
+            {isBacktesting ? `Running Backtest on ${settings.symbol}…` : rules.length === 0 ? 'Add rules to run a backtest' : '▶  Run Backtest'}
           </button>
         </div>
       </div>
@@ -509,14 +508,75 @@ const StrategyBuilder = () => {
           )}
         </div>
 
-        {/* ── Empty state ── */}
+        {/* ── Skeleton state ── */}
         {!results && !isBacktesting && !backtestError && (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', flexDirection: 'column', gap: '16px' }}>
-            <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.35 }}>
-              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-            </svg>
-            <span>Configure your strategy and run a backtest to see real results here.</span>
-          </div>
+          <>
+            <style>{`
+              @keyframes skeletonShimmer {
+                0%   { background-position: -400px 0; }
+                100% { background-position: 400px 0; }
+              }
+            `}</style>
+            {(() => {
+              const skeletonBar = (width, height = '22px') => (
+                <div style={{
+                  width, height, borderRadius: '6px',
+                  background: isDark
+                    ? 'linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%)'
+                    : 'linear-gradient(90deg, rgba(0,0,0,0.04) 25%, rgba(0,0,0,0.08) 50%, rgba(0,0,0,0.04) 75%)',
+                  backgroundSize: '800px 100%',
+                  animation: 'skeletonShimmer 1.8s infinite ease-in-out',
+                }} />
+              );
+              const skeletonCard = () => (
+                <div style={{
+                  backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-main)',
+                  borderRadius: '8px', padding: '16px',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  flex: '1', minWidth: 0, gap: '10px',
+                }}>
+                  {skeletonBar('60%', '12px')}
+                  {skeletonBar('45%', '28px')}
+                </div>
+              );
+              return (
+                <>
+                  {/* Row 1 skeleton cards */}
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                    {skeletonCard()}{skeletonCard()}{skeletonCard()}
+                  </div>
+                  {/* Row 2 skeleton cards */}
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                    {skeletonCard()}{skeletonCard()}{skeletonCard()}
+                  </div>
+                  {/* Skeleton equity curve */}
+                  <div style={{
+                    backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-main)',
+                    borderRadius: '8px', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '12px',
+                  }}>
+                    {skeletonBar('180px', '12px')}
+                    {skeletonBar('100%', '180px')}
+                  </div>
+                  {/* Skeleton trade log */}
+                  <div style={{
+                    backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-main)',
+                    borderRadius: '8px', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '10px',
+                  }}>
+                    {skeletonBar('120px', '12px')}
+                    {[...Array(4)].map((_, i) => (
+                      <div key={i} style={{ display: 'flex', gap: '10px' }}>
+                        {skeletonBar('12%', '14px')}{skeletonBar('18%', '14px')}{skeletonBar('18%', '14px')}{skeletonBar('14%', '14px')}{skeletonBar('14%', '14px')}{skeletonBar('12%', '14px')}{skeletonBar('10%', '14px')}
+                      </div>
+                    ))}
+                  </div>
+                  {/* Helpful hint */}
+                  <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem', padding: '8px 0' }}>
+                    Add trading rules and run a backtest to populate these results.
+                  </div>
+                </>
+              );
+            })()}
+          </>
         )}
 
         {/* ── Loading ── */}
