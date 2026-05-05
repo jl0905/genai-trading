@@ -16,7 +16,7 @@ const tabComponents = {
 
 // Tab configuration - easy to modify and extend
 const initialTabs = [
-  { id: 'entryVisual', name: '3D Donut', component: tabComponents.entryVisual },
+  { id: 'entryVisual', name: 'Home', component: tabComponents.entryVisual },
   { id: 'tvInteractiveChart', name: 'Charts', component: tabComponents.tvInteractiveChart },
   { id: 'strategy', name: 'Strategy', component: tabComponents.strategy },
   { id: 'reader', name: 'Reader', component: tabComponents.reader },
@@ -43,6 +43,24 @@ function App() {
     document.addEventListener("mousedown", handleClickOutside)
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [loginRef])
+
+  useEffect(() => {
+    const handleOpenReaderSection = (event) => {
+      const sectionId = event.detail?.sectionId
+      if (!sectionId) return
+
+      sessionStorage.setItem('readerTargetSection', sectionId)
+      setActiveTab('reader')
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('reader-scroll-to-section', {
+          detail: { sectionId },
+        }))
+      }, 0)
+    }
+
+    window.addEventListener('open-reader-section', handleOpenReaderSection)
+    return () => window.removeEventListener('open-reader-section', handleOpenReaderSection)
+  }, [])
 
   const handleLogin = (e) => {
     e.preventDefault()
