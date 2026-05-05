@@ -9,51 +9,68 @@ const LOAD_TRIGGER_BARS = 20;
 const EDUCATION_TOPICS = {
   stockChart: {
     title: 'What is a stock chart?',
+    readerSection: 'chart',
     body: "A stock chart is a visual record of how a stock's price changes over time. Each point or candle represents trading activity for a specific period, helping investors compare the opening price, closing price, highest price, lowest price, and volume. By reading the chart, you can quickly see whether the stock is trending upward, trending downward, or moving sideways.",
   },
   searchTicker: {
     title: 'Search ticker',
+    readerSection: 'ticker',
     body: 'A ticker is the short symbol used to identify a publicly traded stock or ETF. For example, AAPL represents Apple and MSFT represents Microsoft. Searching a ticker changes the chart to show that security.',
   },
   currentPrice: {
     title: 'Current price',
+    readerSection: 'current-price',
     body: 'The current price is the latest available trading price for the selected stock. The number below it shows how much the stock has moved compared with the previous close, both in dollars and percent.',
   },
   dayRange: {
     title: 'Day range',
+    readerSection: 'day-range',
     body: 'The day range shows the lowest and highest prices reached during the current trading day. A wide range usually means the stock moved a lot during the session.',
   },
   volume: {
     title: 'Volume',
+    readerSection: 'volume',
     body: 'Volume is the number of shares traded during the selected period. Higher volume means more market participation and can make a price move more meaningful.',
   },
   marketCap: {
     title: 'Market cap',
+    readerSection: 'market-cap',
     body: "Market capitalization is the total market value of the company's shares. It is calculated by multiplying the share price by the number of shares outstanding.",
   },
   peRatio: {
     title: 'P/E ratio',
+    readerSection: 'pe-ratio',
     body: "The price-to-earnings ratio compares a company's stock price with its earnings per share. Investors often use it to judge whether a stock looks expensive or inexpensive relative to its profits.",
   },
   greenCandle: {
     title: 'Green candle',
+    readerSection: 'green-candle',
     body: 'A green candle means the stock closed higher than it opened for that candle period. The candle body shows the open-to-close move, while the thin wick shows the high and low.',
   },
   redCandle: {
     title: 'Red candle',
+    readerSection: 'red-candle',
     body: 'A red candle means the stock closed lower than it opened for that candle period. The candle body shows the open-to-close move, while the thin wick shows the high and low.',
   },
   sma20: {
     title: 'SMA 20',
+    readerSection: 'sma-20',
     body: 'A simple moving average smooths price by averaging the last set number of closing prices. SMA 20 averages the last 20 candles and is often used to see the short-term trend.',
   },
-  sma50: {
-    title: 'SMA 50',
-    body: 'SMA 50 averages the last 50 candles. Because it uses more data than SMA 20, it moves more slowly and helps show a broader trend.',
+  sma200: {
+    title: 'SMA 200',
+    readerSection: 'sma-200',
+    body: 'SMA 200 averages the last 200 daily candles. Traders often use it to understand the long-term trend and to compare whether price is above or below a major trend level.',
   },
-  ema20: {
-    title: 'EMA 20',
-    body: 'An exponential moving average also smooths price, but it gives more weight to recent candles. EMA 20 reacts faster to new price movement than SMA 20.',
+  ema9: {
+    title: 'EMA 9',
+    readerSection: 'ema-9',
+    body: 'An exponential moving average smooths price while giving more weight to recent candles. EMA 9 is a fast-moving indicator that can help show short-term momentum on a daily chart.',
+  },
+  vrvp: {
+    title: 'VRVP',
+    readerSection: 'vrvp',
+    body: 'Visible Range Volume Profile estimates how much volume traded at each price area inside the currently visible chart window. Larger blocks show price zones where more trading activity occurred.',
   },
 };
 
@@ -72,11 +89,12 @@ export default function TvInteractiveChart({ isActive = true }) {
   const [searchLoading, setSearchLoading] = useState(false);
   const [showEducation, setShowEducation] = useState(false);
   const [selectedEducationTopic, setSelectedEducationTopic] = useState('stockChart');
-  const [educationPanelPosition, setEducationPanelPosition] = useState({ x: 24, y: 170 });
+  const [educationPanelPosition, setEducationPanelPosition] = useState({ x: 24, y: 260 });
   const [visibleIndicators, setVisibleIndicators] = useState({
     sma20: true,
-    sma50: false,
-    ema20: false,
+    sma200: false,
+    ema9: false,
+    vrvp: false,
   });
 
   // AI analysis state
@@ -86,6 +104,8 @@ export default function TvInteractiveChart({ isActive = true }) {
   const [analysisError, setAnalysisError] = useState(null);
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [visibleRangeInfo, setVisibleRangeInfo] = useState(null);
+  const [priceGaugeMarkers, setPriceGaugeMarkers] = useState(null);
+  const [volumeProfileBars, setVolumeProfileBars] = useState([]);
 
   const showAnalysisRef = useRef(false);
   useEffect(() => { showAnalysisRef.current = showAnalysis; }, [showAnalysis]);
@@ -98,7 +118,7 @@ export default function TvInteractiveChart({ isActive = true }) {
   const isDraggingRef = useRef(false);
   const dragStartRef = useRef({ x: 0, width: 0 });
   const isEducationDraggingRef = useRef(false);
-  const educationDragStartRef = useRef({ mouseX: 0, mouseY: 0, panelX: 24, panelY: 170 });
+  const educationDragStartRef = useRef({ mouseX: 0, mouseY: 0, panelX: 24, panelY: 260 });
 
   useEffect(() => {
     const handleMouseMove = (e) => {
@@ -245,6 +265,135 @@ export default function TvInteractiveChart({ isActive = true }) {
     }));
     selectEducationTopic(indicator);
   };
+
+  const openReaderSection = (sectionId) => {
+    if (!sectionId) return;
+
+    window.dispatchEvent(new CustomEvent('open-reader-section', {
+      detail: { sectionId },
+    }));
+  };
+
+  const getTimeRangeDates = (timeRange) => {
+    if (!timeRange) return null;
+
+    return {
+      from: typeof timeRange.from === 'string'
+        ? timeRange.from
+        : new Date(timeRange.from * 1000).toISOString().split('T')[0],
+      to: typeof timeRange.to === 'string'
+        ? timeRange.to
+        : new Date(timeRange.to * 1000).toISOString().split('T')[0],
+    };
+  };
+
+  const updatePriceGaugeMarkers = useCallback((timeRange = null) => {
+    if (!candleSeriesRef.current || stockDataRef.current.length === 0) return;
+
+    const rangeDates = getTimeRangeDates(timeRange || chartRef.current?.timeScale().getVisibleRange());
+    const visibleData = rangeDates
+      ? stockDataRef.current.filter(d => d.date >= rangeDates.from && d.date <= rangeDates.to)
+      : stockDataRef.current;
+
+    if (visibleData.length === 0) {
+      setPriceGaugeMarkers(null);
+      return;
+    }
+
+    const high = visibleData.reduce((highest, point) => (
+      point.high > highest.high ? point : highest
+    ), visibleData[0]);
+    const low = visibleData.reduce((lowest, point) => (
+      point.low < lowest.low ? point : lowest
+    ), visibleData[0]);
+    const highY = candleSeriesRef.current.priceToCoordinate(high.high);
+    const lowY = candleSeriesRef.current.priceToCoordinate(low.low);
+
+    if (highY == null || lowY == null) {
+      setPriceGaugeMarkers(null);
+      return;
+    }
+
+    setPriceGaugeMarkers({
+      high: Number(high.high),
+      low: Number(low.low),
+      highY,
+      lowY,
+    });
+  }, []);
+
+  const updateVolumeProfile = useCallback((timeRange = null) => {
+    if (!visibleIndicators.vrvp || !candleSeriesRef.current || stockDataRef.current.length === 0) {
+      setVolumeProfileBars([]);
+      return;
+    }
+
+    const rangeDates = getTimeRangeDates(timeRange || chartRef.current?.timeScale().getVisibleRange());
+    const visibleData = rangeDates
+      ? stockDataRef.current.filter(d => d.date >= rangeDates.from && d.date <= rangeDates.to)
+      : stockDataRef.current;
+
+    if (visibleData.length === 0) {
+      setVolumeProfileBars([]);
+      return;
+    }
+
+    const visibleHigh = Math.max(...visibleData.map(d => Number(d.high)));
+    const visibleLow = Math.min(...visibleData.map(d => Number(d.low)));
+    const priceRange = visibleHigh - visibleLow;
+
+    if (!Number.isFinite(priceRange) || priceRange <= 0) {
+      setVolumeProfileBars([]);
+      return;
+    }
+
+    const binCount = 24;
+    const binSize = priceRange / binCount;
+    const bins = Array.from({ length: binCount }, (_, index) => ({
+      low: visibleLow + index * binSize,
+      high: visibleLow + (index + 1) * binSize,
+      volume: 0,
+    }));
+
+    visibleData.forEach((point) => {
+      const barLow = Number(point.low);
+      const barHigh = Number(point.high);
+      const barVolume = Number(point.volume) || 0;
+      const lowIndex = Math.max(0, Math.floor((barLow - visibleLow) / binSize));
+      const highIndex = Math.min(binCount - 1, Math.floor((barHigh - visibleLow) / binSize));
+      const touchedBins = Math.max(highIndex - lowIndex + 1, 1);
+
+      for (let index = lowIndex; index <= highIndex; index += 1) {
+        bins[index].volume += barVolume / touchedBins;
+      }
+    });
+
+    const maxVolume = Math.max(...bins.map(bin => bin.volume));
+    if (!Number.isFinite(maxVolume) || maxVolume <= 0) {
+      setVolumeProfileBars([]);
+      return;
+    }
+
+    const profileWidth = Math.min(190, Math.max(110, (chartContainerRef.current?.clientWidth || 700) * 0.22));
+    const bars = bins
+      .map((bin) => {
+        const topY = candleSeriesRef.current.priceToCoordinate(bin.high);
+        const bottomY = candleSeriesRef.current.priceToCoordinate(bin.low);
+        if (topY == null || bottomY == null) return null;
+
+        return {
+          top: Math.min(topY, bottomY),
+          height: Math.max(Math.abs(bottomY - topY), 3),
+          width: Math.max((bin.volume / maxVolume) * profileWidth, 2),
+          volume: bin.volume,
+          price: (bin.high + bin.low) / 2,
+          isPointOfControl: bin.volume === maxVolume,
+        };
+      })
+      .filter(Boolean);
+
+    setVolumeProfileBars(bars);
+  }, [visibleIndicators.vrvp]);
 
   // --- Debounced search ---
   useEffect(() => {
@@ -452,19 +601,19 @@ export default function TvInteractiveChart({ isActive = true }) {
           lastValueVisible: false,
           visible: visibleIndicators.sma20,
         }),
-        sma50: chartRef.current.addSeries(LineSeries, {
+        sma200: chartRef.current.addSeries(LineSeries, {
           color: '#3b82f6',
           lineWidth: 2,
           priceLineVisible: false,
           lastValueVisible: false,
-          visible: visibleIndicators.sma50,
+          visible: visibleIndicators.sma200,
         }),
-        ema20: chartRef.current.addSeries(LineSeries, {
+        ema9: chartRef.current.addSeries(LineSeries, {
           color: '#a855f7',
           lineWidth: 2,
           priceLineVisible: false,
           lastValueVisible: false,
-          visible: visibleIndicators.ema20,
+          visible: visibleIndicators.ema9,
         }),
       };
 
@@ -479,15 +628,14 @@ export default function TvInteractiveChart({ isActive = true }) {
       chartRef.current.timeScale().subscribeVisibleTimeRangeChange((timeRange) => {
         if (timeoutId) clearTimeout(timeoutId);
         timeoutId = setTimeout(() => {
+          updatePriceGaugeMarkers(timeRange);
+          updateVolumeProfile(timeRange);
+
           if (timeRange && stockDataRef.current.length > 0) {
-            const fromStr = typeof timeRange.from === 'string' 
-              ? timeRange.from 
-              : new Date(timeRange.from * 1000).toISOString().split('T')[0];
-            const toStr = typeof timeRange.to === 'string' 
-              ? timeRange.to 
-              : new Date(timeRange.to * 1000).toISOString().split('T')[0];
+            const rangeDates = getTimeRangeDates(timeRange);
+            if (!rangeDates) return;
             
-            const visibleData = stockDataRef.current.filter(d => d.date >= fromStr && d.date <= toStr);
+            const visibleData = stockDataRef.current.filter(d => d.date >= rangeDates.from && d.date <= rangeDates.to);
             if (visibleData.length > 0) {
               setVisibleRangeInfo({
                 start: visibleData[0],
@@ -515,11 +663,11 @@ export default function TvInteractiveChart({ isActive = true }) {
 
     const sortedStockData = [...stockData].sort((a, b) => a.date.localeCompare(b.date));
     indicatorSeriesRef.current.sma20?.setData(calculateSMA(sortedStockData, 20));
-    indicatorSeriesRef.current.sma50?.setData(calculateSMA(sortedStockData, 50));
-    indicatorSeriesRef.current.ema20?.setData(calculateEMA(sortedStockData, 20));
+    indicatorSeriesRef.current.sma200?.setData(calculateSMA(sortedStockData, 200));
+    indicatorSeriesRef.current.ema9?.setData(calculateEMA(sortedStockData, 9));
     indicatorSeriesRef.current.sma20?.applyOptions({ visible: visibleIndicators.sma20 });
-    indicatorSeriesRef.current.sma50?.applyOptions({ visible: visibleIndicators.sma50 });
-    indicatorSeriesRef.current.ema20?.applyOptions({ visible: visibleIndicators.ema20 });
+    indicatorSeriesRef.current.sma200?.applyOptions({ visible: visibleIndicators.sma200 });
+    indicatorSeriesRef.current.ema9?.applyOptions({ visible: visibleIndicators.ema9 });
 
     // Restore view position when prepending, or fit content on first load
     if (visibleRangeRef.current) {
@@ -529,7 +677,9 @@ export default function TvInteractiveChart({ isActive = true }) {
       chartRef.current.timeScale().fitContent();
       initialFitDoneRef.current = true;
     }
-  }, [stockData, isActive, visibleIndicators]);
+    setTimeout(() => updatePriceGaugeMarkers(), 0);
+    setTimeout(() => updateVolumeProfile(), 0);
+  }, [stockData, isActive, visibleIndicators, updatePriceGaugeMarkers, updateVolumeProfile]);
 
   // --- Resize handler (uses ResizeObserver to react to container width changes) ---
   const chartRowRef = useRef(null);
@@ -540,6 +690,8 @@ export default function TvInteractiveChart({ isActive = true }) {
           width: chartContainerRef.current.clientWidth,
           height: chartContainerRef.current.clientHeight
         });
+        updatePriceGaugeMarkers();
+        updateVolumeProfile();
       }
     };
 
@@ -567,6 +719,8 @@ export default function TvInteractiveChart({ isActive = true }) {
             width: chartContainerRef.current.clientWidth,
             height: chartContainerRef.current.clientHeight
           });
+          updatePriceGaugeMarkers();
+          updateVolumeProfile();
           if (!initialFitDoneRef.current && stockDataRef.current.length > 0) {
             chartRef.current.timeScale().fitContent();
             initialFitDoneRef.current = true;
@@ -574,7 +728,7 @@ export default function TvInteractiveChart({ isActive = true }) {
         }
       }, 50);
     }
-  }, [isActive]);
+  }, [isActive, updatePriceGaugeMarkers, updateVolumeProfile]);
 
   // --- Force resize when analysis panel toggles or resizes ---
   useEffect(() => {
@@ -582,10 +736,16 @@ export default function TvInteractiveChart({ isActive = true }) {
       setTimeout(() => {
         if (chartRef.current && chartContainerRef.current) {
           chartRef.current.applyOptions({ width: chartContainerRef.current.clientWidth });
+          updatePriceGaugeMarkers();
+          updateVolumeProfile();
         }
       }, 50); // Small delay to allow flexbox to calculate new layout
     }
-  }, [showAnalysis, panelWidth]);
+  }, [showAnalysis, panelWidth, updatePriceGaugeMarkers, updateVolumeProfile]);
+
+  useEffect(() => {
+    updateVolumeProfile();
+  }, [visibleIndicators.vrvp, updateVolumeProfile]);
 
   // --- Cleanup chart on unmount ---
   useEffect(() => {
@@ -616,6 +776,8 @@ export default function TvInteractiveChart({ isActive = true }) {
     setAnalysisLoading(false);
     setAnalysisError(null);
     setVisibleRangeInfo(null);
+    setPriceGaugeMarkers(null);
+    setVolumeProfileBars([]);
 
     if (chartRef.current) {
       chartRef.current.remove();
@@ -849,6 +1011,18 @@ export default function TvInteractiveChart({ isActive = true }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
           <h2 style={{ margin: 0, fontSize: '20px' }}>{stockInfo?.symbol || symbol}</h2>
           <span style={{ color: 'var(--text-muted)', fontSize: '14px' }}>{stockInfo?.name || 'Loading...'}</span>
+          <span style={{
+            color: 'var(--text-main)',
+            fontSize: '11px',
+            fontWeight: 'bold',
+            border: '1px solid var(--border-main)',
+            backgroundColor: 'var(--bg-panel)',
+            padding: '4px 8px',
+            borderRadius: '4px',
+            textTransform: 'uppercase',
+          }}>
+            1D
+          </span>
 
         </div>
 
@@ -956,12 +1130,17 @@ export default function TvInteractiveChart({ isActive = true }) {
             alignItems: 'center',
             gap: '6px',
             padding: '0 4px',
-            ...getEducationHighlightStyle(selectedEducationTopic.startsWith('sma') || selectedEducationTopic.startsWith('ema') ? selectedEducationTopic : 'sma20'),
+            ...getEducationHighlightStyle(
+              selectedEducationTopic.startsWith('sma') || selectedEducationTopic.startsWith('ema') || selectedEducationTopic === 'vrvp'
+                ? selectedEducationTopic
+                : 'sma20'
+            ),
           }}>
             {[
               { id: 'sma20', label: 'SMA 20', color: '#f59e0b' },
-              { id: 'sma50', label: 'SMA 50', color: '#3b82f6' },
-              { id: 'ema20', label: 'EMA 20', color: '#a855f7' },
+              { id: 'sma200', label: 'SMA 200', color: '#3b82f6' },
+              { id: 'ema9', label: 'EMA 9', color: '#a855f7' },
+              { id: 'vrvp', label: 'VRVP', color: 'var(--theme-primary)' },
             ].map((indicator) => (
               <button
                 key={indicator.id}
@@ -1151,6 +1330,97 @@ export default function TvInteractiveChart({ isActive = true }) {
               inset: 0,
             }}
           />
+          {priceGaugeMarkers && (
+            <>
+              <div style={{
+                position: 'absolute',
+                right: '8px',
+                top: `${priceGaugeMarkers.highY}px`,
+                transform: 'translateY(-50%)',
+                zIndex: 18,
+                pointerEvents: 'none',
+                backgroundColor: 'var(--theme-primary)',
+                color: 'var(--bg-main)',
+                fontFamily: "'Courier New', Courier, monospace",
+                fontSize: '11px',
+                fontWeight: 'bold',
+                padding: '4px 7px',
+                borderRadius: '3px',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+                minWidth: '82px',
+                textAlign: 'center',
+              }}>
+                HIGH ${priceGaugeMarkers.high.toFixed(2)}
+              </div>
+              <div style={{
+                position: 'absolute',
+                right: '8px',
+                top: `${priceGaugeMarkers.lowY}px`,
+                transform: 'translateY(-50%)',
+                zIndex: 18,
+                pointerEvents: 'none',
+                backgroundColor: 'var(--theme-secondary)',
+                color: 'var(--bg-main)',
+                fontFamily: "'Courier New', Courier, monospace",
+                fontSize: '11px',
+                fontWeight: 'bold',
+                padding: '4px 7px',
+                borderRadius: '3px',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+                minWidth: '82px',
+                textAlign: 'center',
+              }}>
+                LOW ${priceGaugeMarkers.low.toFixed(2)}
+              </div>
+            </>
+          )}
+          {visibleIndicators.vrvp && volumeProfileBars.length > 0 && (
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              right: '96px',
+              bottom: 0,
+              width: '210px',
+              zIndex: 14,
+              pointerEvents: 'none',
+            }}>
+              <div style={{
+                position: 'absolute',
+                top: '10px',
+                right: 0,
+                padding: '4px 7px',
+                backgroundColor: 'rgba(var(--theme-primary-rgb), 0.16)',
+                border: '1px solid rgba(var(--theme-primary-rgb), 0.55)',
+                color: 'var(--text-main)',
+                fontFamily: "'Courier New', Courier, monospace",
+                fontSize: '11px',
+                fontWeight: 'bold',
+                borderRadius: '3px',
+              }}>
+                VRVP
+              </div>
+              {volumeProfileBars.map((bar, index) => (
+                <div
+                  key={`${bar.price}-${index}`}
+                  title={`Approx volume near $${bar.price.toFixed(2)}: ${formatVolume(bar.volume)}`}
+                  style={{
+                    position: 'absolute',
+                    right: 0,
+                    top: `${bar.top}px`,
+                    width: `${bar.width}px`,
+                    height: `${bar.height}px`,
+                    backgroundColor: bar.isPointOfControl
+                      ? 'rgba(var(--theme-primary-rgb), 0.62)'
+                      : 'rgba(var(--theme-primary-rgb), 0.28)',
+                    border: bar.isPointOfControl
+                      ? '1px solid rgba(var(--theme-primary-rgb), 0.9)'
+                      : '1px solid rgba(var(--theme-primary-rgb), 0.16)',
+                    borderRadius: '2px 0 0 2px',
+                  }}
+                />
+              ))}
+            </div>
+          )}
           {showEducation && (
             <div style={{
               position: 'absolute',
@@ -1465,7 +1735,35 @@ export default function TvInteractiveChart({ isActive = true }) {
             }}
             title="Drag to move"
           >
-            <h3 style={{ margin: 0, fontSize: '14px' }}>{activeEducation.title}</h3>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              minWidth: 0,
+            }}>
+              <h3 style={{ margin: 0, fontSize: '14px' }}>{activeEducation.title}</h3>
+              <button
+                type="button"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={() => openReaderSection(activeEducation.readerSection)}
+                style={{
+                  backgroundColor: 'transparent',
+                  border: '1px solid var(--theme-primary)',
+                  color: 'var(--theme-primary)',
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-main)',
+                  fontSize: '11px',
+                  fontWeight: 'bold',
+                  lineHeight: 1,
+                  padding: '4px 6px',
+                  borderRadius: '4px',
+                  whiteSpace: 'nowrap',
+                }}
+                title={`Learn more about ${activeEducation.title}`}
+              >
+                Learn more
+              </button>
+            </div>
             <button
               type="button"
               onMouseDown={(e) => e.stopPropagation()}
