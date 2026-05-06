@@ -94,7 +94,8 @@ function EquityCurve({ curve }) {
         vertLine: { color: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)' },
         horzLine: { color: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)' },
       },
-      handleScroll: { vertTouchDrag: false },
+      handleScroll: false,
+      handleScale: false,
     });
 
     const areaSeries = chart.addSeries(AreaSeries, {
@@ -157,7 +158,7 @@ function TradeLog({ trades }) {
   const tdStyle = { padding: '7px 10px', fontSize: '0.82rem', borderBottom: '1px solid var(--border-main)', whiteSpace: 'nowrap' };
 
   return (
-    <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: '220px' }}>
+    <div style={{ overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'auto' }}>
         <thead style={{ position: 'sticky', top: 0, backgroundColor: 'var(--bg-panel)' }}>
           <tr>
@@ -230,10 +231,40 @@ const StrategyBuilder = () => {
     setRules(rules.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
 
   const randomizeRules = () => {
-    const getRandom = (arr) => arr[Math.floor(Math.random() * arr.length)];
+    // Curated strategy templates — each pair uses complementary buy/sell
+    // conditions on indicators that operate on the same scale, so they
+    // reliably produce trades on real OHLCV data.
+    const STRATEGY_TEMPLATES = [
+      // Moving-average crossovers
+      { buy: { indicator: 'SMA 50',  condition: 'Crosses Above', value: 'SMA 200' },
+        sell: { indicator: 'SMA 50',  condition: 'Crosses Below', value: 'SMA 200' } },
+      { buy: { indicator: 'SMA 20',  condition: 'Crosses Above', value: 'SMA 50' },
+        sell: { indicator: 'SMA 20',  condition: 'Crosses Below', value: 'SMA 50' } },
+      { buy: { indicator: 'EMA 20',  condition: 'Crosses Above', value: 'SMA 50' },
+        sell: { indicator: 'EMA 20',  condition: 'Crosses Below', value: 'SMA 50' } },
+      // Price vs moving average
+      { buy: { indicator: 'Price',   condition: 'Crosses Above', value: 'SMA 50' },
+        sell: { indicator: 'Price',   condition: 'Crosses Below', value: 'SMA 50' } },
+      { buy: { indicator: 'Price',   condition: 'Crosses Above', value: 'SMA 200' },
+        sell: { indicator: 'Price',   condition: 'Crosses Below', value: 'SMA 200' } },
+      { buy: { indicator: 'Price',   condition: 'Crosses Above', value: 'EMA 20' },
+        sell: { indicator: 'Price',   condition: 'Crosses Below', value: 'EMA 20' } },
+      { buy: { indicator: 'Price',   condition: 'Crosses Above', value: 'SMA 20' },
+        sell: { indicator: 'Price',   condition: 'Crosses Below', value: 'SMA 20' } },
+      // RSI thresholds (oversold / overbought)
+      { buy: { indicator: 'RSI 14',  condition: 'Crosses Above', value: '30' },
+        sell: { indicator: 'RSI 14',  condition: 'Crosses Below', value: '70' } },
+      { buy: { indicator: 'RSI 14',  condition: 'Is Less Than',  value: '25' },
+        sell: { indicator: 'RSI 14',  condition: 'Is Greater Than', value: '75' } },
+      // MACD zero-line cross
+      { buy: { indicator: 'MACD',    condition: 'Crosses Above', value: '0' },
+        sell: { indicator: 'MACD',    condition: 'Crosses Below', value: '0' } },
+    ];
+
+    const template = STRATEGY_TEMPLATES[Math.floor(Math.random() * STRATEGY_TEMPLATES.length)];
     setRules([
-      { id: Date.now(), indicator: getRandom(INDICATOR_OPTIONS), condition: getRandom(CONDITIONS), value: getRandom(INDICATOR_OPTIONS), action: 'Buy' },
-      { id: Date.now() + 1, indicator: getRandom(INDICATOR_OPTIONS), condition: getRandom(CONDITIONS), value: getRandom(INDICATOR_OPTIONS), action: 'Sell' },
+      { id: Date.now(),     ...template.buy,  action: 'Buy' },
+      { id: Date.now() + 1, ...template.sell, action: 'Sell' },
     ]);
   };
 
@@ -373,11 +404,67 @@ const StrategyBuilder = () => {
             </div>
             <div>
               <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>Start Date</label>
-              <input style={s.input} type="date" value={settings.startDate} onChange={(e) => setSettings({ ...settings, startDate: e.target.value })} />
+              <div style={{
+                display: 'flex', alignItems: 'center',
+                backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-main)', borderRadius: '6px',
+                overflow: 'hidden',
+              }}>
+                <button
+                  style={{ background: 'none', border: 'none', borderRight: '1px solid var(--border-main)', color: 'var(--text-muted)', cursor: 'pointer', padding: '8px 7px', lineHeight: 1, fontSize: '0.65rem', display: 'flex', alignItems: 'center' }}
+                  onClick={() => {
+                    const d = new Date(settings.startDate);
+                    d.setMonth(d.getMonth() - 1);
+                    setSettings({ ...settings, startDate: d.toISOString().split('T')[0] });
+                  }}
+                  title="Back 1 month"
+                >◀</button>
+                <input
+                  style={{ ...s.input, border: 'none', borderRadius: 0, flex: 1, minWidth: 0 }}
+                  type="date" value={settings.startDate}
+                  onChange={(e) => setSettings({ ...settings, startDate: e.target.value })}
+                />
+                <button
+                  style={{ background: 'none', border: 'none', borderLeft: '1px solid var(--border-main)', color: 'var(--text-muted)', cursor: 'pointer', padding: '8px 7px', lineHeight: 1, fontSize: '0.65rem', display: 'flex', alignItems: 'center' }}
+                  onClick={() => {
+                    const d = new Date(settings.startDate);
+                    d.setMonth(d.getMonth() + 1);
+                    setSettings({ ...settings, startDate: d.toISOString().split('T')[0] });
+                  }}
+                  title="Forward 1 month"
+                >▶</button>
+              </div>
             </div>
             <div>
               <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>End Date</label>
-              <input style={s.input} type="date" value={settings.endDate} onChange={(e) => setSettings({ ...settings, endDate: e.target.value })} />
+              <div style={{
+                display: 'flex', alignItems: 'center',
+                backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-main)', borderRadius: '6px',
+                overflow: 'hidden',
+              }}>
+                <button
+                  style={{ background: 'none', border: 'none', borderRight: '1px solid var(--border-main)', color: 'var(--text-muted)', cursor: 'pointer', padding: '8px 7px', lineHeight: 1, fontSize: '0.65rem', display: 'flex', alignItems: 'center' }}
+                  onClick={() => {
+                    const d = new Date(settings.endDate);
+                    d.setMonth(d.getMonth() - 1);
+                    setSettings({ ...settings, endDate: d.toISOString().split('T')[0] });
+                  }}
+                  title="Back 1 month"
+                >◀</button>
+                <input
+                  style={{ ...s.input, border: 'none', borderRadius: 0, flex: 1, minWidth: 0 }}
+                  type="date" value={settings.endDate}
+                  onChange={(e) => setSettings({ ...settings, endDate: e.target.value })}
+                />
+                <button
+                  style={{ background: 'none', border: 'none', borderLeft: '1px solid var(--border-main)', color: 'var(--text-muted)', cursor: 'pointer', padding: '8px 7px', lineHeight: 1, fontSize: '0.65rem', display: 'flex', alignItems: 'center' }}
+                  onClick={() => {
+                    const d = new Date(settings.endDate);
+                    d.setMonth(d.getMonth() + 1);
+                    setSettings({ ...settings, endDate: d.toISOString().split('T')[0] });
+                  }}
+                  title="Forward 1 month"
+                >▶</button>
+              </div>
             </div>
           </div>
         </div>
@@ -599,39 +686,61 @@ const StrategyBuilder = () => {
         {/* ── Results ── */}
         {results && !isBacktesting && (
           <>
-            {/* Metric cards row 1 */}
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <StatCard
-                label="Strategy Return"
-                value={fmtPct(metrics.total_return_pct)}
-                color={returnPositive ? 'var(--theme-primary)' : 'var(--theme-secondary)'}
-                large
-              />
-              <StatCard
-                label="Buy & Hold"
-                value={fmtPct(metrics.buy_and_hold_pct)}
-                color={metrics.buy_and_hold_pct >= 0 ? 'var(--theme-primary)' : 'var(--theme-secondary)'}
-                large
-              />
-              <StatCard
-                label="Win Rate"
-                value={`${metrics.win_rate_pct.toFixed(1)}%`}
-              />
+            {/* Hero metrics — Strategy Return & Final Equity */}
+            <div style={{ display: 'flex', gap: '14px' }}>
+              <div style={{
+                flex: 1, backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-main)',
+                borderRadius: '10px', padding: '22px', display: 'flex', flexDirection: 'column',
+                alignItems: 'center', justifyContent: 'center', gap: '6px',
+              }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  Strategy Return
+                </div>
+                <div style={{
+                  fontSize: '2.4rem', fontWeight: 'bold', lineHeight: 1.1,
+                  color: returnPositive ? 'var(--theme-primary)' : 'var(--theme-secondary)',
+                }}>
+                  {fmtPct(metrics.total_return_pct)}
+                </div>
+              </div>
+              <div style={{
+                flex: 1, backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-main)',
+                borderRadius: '10px', padding: '22px', display: 'flex', flexDirection: 'column',
+                alignItems: 'center', justifyContent: 'center', gap: '6px',
+              }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  Final Equity
+                </div>
+                <div style={{
+                  fontSize: '2.4rem', fontWeight: 'bold', lineHeight: 1.1,
+                  color: metrics.final_equity >= metrics.initial_capital ? 'var(--theme-primary)' : 'var(--theme-secondary)',
+                }}>
+                  {fmtCurrency(metrics.final_equity)}
+                </div>
+              </div>
             </div>
 
-            {/* Metric cards row 2 */}
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <StatCard label="Total Trades" value={metrics.total_trades} />
-              <StatCard
-                label="Max Drawdown"
-                value={`-${metrics.max_drawdown_pct.toFixed(2)}%`}
-                color="var(--theme-secondary)"
-              />
-              <StatCard
-                label="Final Equity"
-                value={fmtCurrency(metrics.final_equity)}
-                color={metrics.final_equity >= metrics.initial_capital ? 'var(--theme-primary)' : 'var(--theme-secondary)'}
-              />
+            {/* Secondary metrics — compact inline row */}
+            <div style={{
+              display: 'flex', gap: '6px', flexWrap: 'wrap',
+              backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-main)',
+              borderRadius: '8px', padding: '10px 14px', alignItems: 'center', justifyContent: 'space-around',
+            }}>
+              {[
+                { label: 'Buy & Hold', value: fmtPct(metrics.buy_and_hold_pct) },
+                { label: 'Win Rate', value: `${metrics.win_rate_pct.toFixed(1)}%` },
+                { label: 'Trades', value: metrics.total_trades },
+                { label: 'Max Drawdown', value: `-${metrics.max_drawdown_pct.toFixed(2)}%`, color: 'var(--theme-secondary)' },
+              ].map((stat) => (
+                <div key={stat.label} style={{ display: 'flex', alignItems: 'baseline', gap: '6px', padding: '2px 8px' }}>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    {stat.label}
+                  </span>
+                  <span style={{ fontSize: '0.95rem', fontWeight: 600, color: stat.color || 'var(--text-main)' }}>
+                    {stat.value}
+                  </span>
+                </div>
+              ))}
             </div>
 
             {/* Equity Curve */}
