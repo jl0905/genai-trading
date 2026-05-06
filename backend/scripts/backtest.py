@@ -168,7 +168,8 @@ def run_backtest(
     if not data or len(data) < 2:
         return {"success": False, "error": "Not enough data to run a backtest (need at least 2 bars)."}
 
-    closes = [float(d["price"]) for d in data]
+    # Use median price (High + Low) / 2 as the cost basis
+    closes = [(float(d["high"]) + float(d["low"])) / 2 for d in data]
     dates  = [d["date"] for d in data]
 
     series = _build_indicator_series(closes)
