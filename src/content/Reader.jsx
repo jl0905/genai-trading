@@ -381,22 +381,22 @@ export default function Reader({ isActive = false }) {
       display: 'flex',
       height: '100%',
       fontFamily: 'var(--font-main)',
-      backgroundColor: '#000000',
-      color: '#ffffff',
+      backgroundColor: 'var(--bg-main)',
+      color: 'var(--text-main)',
       overflow: 'hidden',
     }}>
       <div className="table-of-contents reader-scroll-hidden" style={{
         width: '220px',
-        borderRight: '1px solid #333333',
+        borderRight: '1px solid var(--border-main)',
         overflowY: 'auto',
         padding: '16px 12px',
-        backgroundColor: '#0a0a0a',
+        backgroundColor: 'var(--bg-panel)',
         flexShrink: 0,
         height: '100%',
       }}>
         <h4 style={{
           marginBottom: '16px',
-          color: '#999999',
+          color: 'var(--text-muted)',
           textTransform: 'uppercase',
           letterSpacing: '2px',
           fontSize: '10px',
@@ -413,9 +413,9 @@ export default function Reader({ isActive = false }) {
                     textAlign: 'left',
                     padding: '7px 10px',
                     border: 'none',
-                    borderLeft: activeSection === section.id ? '2px solid #ffffff' : '2px solid transparent',
-                    backgroundColor: activeSection === section.id ? '#141414' : 'transparent',
-                    color: activeSection === section.id ? '#ffffff' : '#b0b0b0',
+                    borderLeft: activeSection === section.id ? '2px solid var(--border-focus)' : '2px solid transparent',
+                    backgroundColor: activeSection === section.id ? 'var(--btn-bg)' : 'transparent',
+                    color: activeSection === section.id ? 'var(--text-main)' : 'var(--text-muted)',
                     cursor: 'pointer',
                     fontSize: '12px',
                     fontWeight: activeSection === section.id ? '600' : '400',
@@ -441,7 +441,7 @@ export default function Reader({ isActive = false }) {
           overflowY: 'auto',
           overflowX: 'hidden',
           padding: '40px 60px 60px 40px',
-          backgroundColor: '#000000',
+          backgroundColor: 'var(--bg-main)',
           height: '100%',
         }}
         ref={contentRef}
@@ -453,24 +453,24 @@ export default function Reader({ isActive = false }) {
             font-size: 28px;
             line-height: 1.2;
             margin: 0 0 16px;
-            color: #ffffff;
+            color: var(--text-main);
           }
           .reader-article h3 {
             font-size: 15px;
             line-height: 1.4;
             margin: 24px 0 10px;
-            color: #ffffff;
+            color: var(--text-main);
             text-transform: uppercase;
             letter-spacing: 0.6px;
           }
           .reader-article p {
-            color: #cfcfcf;
+            color: var(--text-main);
             font-size: 15px;
             line-height: 1.75;
             margin: 0 0 16px;
           }
           .reader-article ul {
-            color: #cfcfcf;
+            color: var(--text-main);
             font-size: 15px;
             line-height: 1.7;
             margin: 0 0 18px;
@@ -480,7 +480,7 @@ export default function Reader({ isActive = false }) {
             margin-bottom: 8px;
           }
           .reader-article strong {
-            color: #ffffff;
+            color: var(--text-main);
           }
         `}</style>
         <div style={{ maxWidth: '760px', margin: '0 auto', paddingLeft: '32px' }}>
