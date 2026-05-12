@@ -9,6 +9,7 @@ A React-based financial dashboard with real-time stock charts, technical analysi
 - Vite (`^8.0.1`) with `@vitejs/plugin-react` (`^6.0.1`)
 - TailwindCSS (`^4.2.2`) with `@tailwindcss/vite` (`^4.2.2`)
 - lightweight-charts (`^5.1.0`)
+- `@splinetool/react-spline` & `@splinetool/runtime` for native 3D WebGL scenes
 - Chart.js (`^4.5.1`) & `react-chartjs-2` (`^5.3.1`)
 - chartjs-plugin-annotation (`^3.1.0`)
 - chartjs-chart-financial (`^0.2.1`)
@@ -23,8 +24,8 @@ A React-based financial dashboard with real-time stock charts, technical analysi
 - Alpaca API Integration: For paper trading dashboard, simulated orders, and market-data volume profiles — configured in `alpaca_config.py`
 
 ## Project Structure
-- `src/`: React frontend (`App.jsx` dynamically manages 5 core functional tabs with HTML5 drag-and-drop tab reordering; `api.js` connects to the backend endpoints).
-- `src/content/`: Tab components (`EntryVisual.jsx`, `tvInteractiveChart.jsx`, `PaperTrading.jsx`, `StrategyBuilder.jsx`, `Reader.jsx`) and supportive UI subcomponents.
+- `src/`: React frontend (`App.jsx` dynamically manages 6 core functional tabs with HTML5 drag-and-drop tab reordering; `api.js` connects to the backend endpoints).
+- `src/content/`: Tab components (`EntryVisual.jsx`, `SplineTab.jsx`, `tvInteractiveChart.jsx`, `PaperTrading.jsx`, `StrategyBuilder.jsx`, `Reader.jsx`) and supportive UI subcomponents.
 - `backend/main.py`: FastAPI application server serving all client-side data queries, integration tasks, backtesting simulations, and authentication flows.
 - `backend/scripts/`: Python utility modules for data fetching (`stockdata.py`, `googlefin.py`), AI analysis formatting (`chart_analyzer.py`), pure-Python backtesting (`backtest.py`), and broker integrations (`alpaca_config.py`).
 - `.env`: Environment variables file located at the project root (not committed) — securely retains `OPENROUTER_API_KEY`.
@@ -48,6 +49,7 @@ A React-based financial dashboard with real-time stock charts, technical analysi
 
 ## Key Components
 - **EntryVisual.jsx**: Renders a premium, dynamic 3D ASCII art rotating visualization of Saturn/Donut sphere and equatorial rings directly onto the canvas, functioning as an immersive high-fidelity project home component. Supports manual cursor drag multi-axis rotation smoothly transitioning to continuous autonomous momentum loops.
+- **SplineTab.jsx**: Re-implements the home tab's 3D rendering concepts using custom hardware-accelerated geometries via native **Three.js**. Features a rotating staircase formation of 10 cubes (4→3→2→1 layout) utilizing ultra-smooth `RoundedBoxGeometry` (`radius: 0.08`, `segments: 12`), rendered using premium pristine `MeshPhysicalMaterial` exhibiting high-end iridescent solid glass properties (`transmission: 0.9`, `opacity: 1.0`, `roughness: 0.15`, `clearcoat: 1.0`, `clearcoatRoughness: 0.0`, dynamic base color switching between `#eef4ff` in light mode and `#334155` in dark mode, `ior: 1.5`, `thickness: 1.5`, `dispersion: 2.5`, full thin-film holographic iridescence, and volumetric absorption via `attenuationColor` / `attenuationDistance`) dynamically set against a theme-responsive contrasting background (`#f0f4f8` in light mode, `#0f172a` in dark mode via a live `MutationObserver`) and illuminated via a complete `RoomEnvironment` enriched with sharp directional bevel highlights, brilliant camera-facing rim lighting, and vibrant pink/cyan `RectAreaLight` gradients. The entire staircase rotates as a single rigid body with click-and-drag manual rotation.
 - **TvInteractiveChart.jsx**: Uses lightweight-charts for a sleek, TradingView-style high-performance candlestick viewport paired with absolute volume bar overlays. Features dynamic infinite-scroll pagination loading previous 6-month historical segments seamlessly on scroll/zoom interactions. Incorporates background live telemetry polling and an active **AI Analyze** trigger capturing user-visible window ranges to generate deep contextual insights rendered inside a resizable collateral drawer. Toggleable overlays include SMA 20, SMA 200, EMA 9, Bollinger Bands (upper/lower dashed bands), and VRVP.
 - **PaperTrading.jsx**: Alpaca simulation gateway panel rendering active portfolio summaries (Buying Power, Cash, Portfolio Value), granular dynamic datatables mapping live paper positions/unrealized P&L, chronologically organized historical order registries, and dedicated forms supporting customized simulated order execution (Symbol, Side, Quantity).
 - **StrategyBuilder.jsx**: Comprehensive conditional logic strategy framework builder supporting nested Indicator/Action rulesets. Incorporates advanced live UI performance optimizations including request debouncing, strict race-condition guards, custom stat card formatting (Strategy Return, Win Rate, Max Drawdown, Final Equity), responsive non-interactive static SVG equity curves, scrollable execution trade logs, a comparative **Buy & Hold** benchmark guide, and an exploratory **Randomize** scenario trigger. Supported Indicators: SMA 20/50/200, EMA 20, RSI 14, MACD, MACD Signal, BB Upper, BB Lower, Price.

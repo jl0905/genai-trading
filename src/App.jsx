@@ -5,6 +5,7 @@ import Reader from './content/Reader.jsx'
 import TvInteractiveChart from './content/tvInteractiveChart.jsx'
 import StrategyBuilder from './content/StrategyBuilder.jsx'
 import PaperTrading from './content/PaperTrading.jsx'
+import SplineTab from './content/SplineTab.jsx'
 import { useTheme } from './ThemeContext.jsx'
 
 // Define your tab components here - easy to add new ones!
@@ -14,11 +15,13 @@ const tabComponents = {
   tvInteractiveChart: TvInteractiveChart,
   strategy: StrategyBuilder,
   paperTrading: PaperTrading,
+  spline: SplineTab,
 }
 
 // Tab configuration - easy to modify and extend
 const initialTabs = [
   { id: 'entryVisual', name: 'Home', component: tabComponents.entryVisual },
+  { id: 'spline', name: 'Spline', component: tabComponents.spline },
   { id: 'tvInteractiveChart', name: 'Charts', component: tabComponents.tvInteractiveChart },
   { id: 'paperTrading', name: 'Paper', component: tabComponents.paperTrading },
   { id: 'strategy', name: 'Strategy', component: tabComponents.strategy },

@@ -63,83 +63,68 @@ export default function EntryVisual() {
                 const b = new Array(gridSize).fill(' ');
                 const width = 100; 
                 const height = 50; 
-                
+
+                // Shared lighting constants
+                const worldLightX = 1;
+                const worldLightY = -1;
+                const worldLightZ = 0.5;
+                const lightMagnitude = Math.sqrt(worldLightX * worldLightX + worldLightY * worldLightY + worldLightZ * worldLightZ);
+                const normalizedLightX = worldLightX / lightMagnitude;
+                const normalizedLightY = worldLightY / lightMagnitude;
+                const normalizedLightZ = worldLightZ / lightMagnitude;
+
+                // Helper: project a 3D point through the shared rotation + perspective pipeline
+                const projectPoint = (x1, y1, zOriginal, fixedChar) => {
+                        // Calculate lighting on unrotated object (fixed light source)
+                        const normalUnrotated = Math.sqrt(x1 * x1 + y1 * y1 + zOriginal * zOriginal);
+                        const dotProduct = (x1 * normalizedLightX + y1 * normalizedLightY + zOriginal * normalizedLightZ) / normalUnrotated;
+                        const brightness = Math.min(8, Math.floor(11 * Math.max(0, dotProduct)));
+
+                        // Multi-axis rotation for full 3D viewing
+                        // Rotate around Y axis (horizontal)
+                        const x2 = x1 * Math.cos(horizontalAngle) - zOriginal * Math.sin(horizontalAngle);
+                        const zRotated = x1 * Math.sin(horizontalAngle) + zOriginal * Math.cos(horizontalAngle);
+
+                        // Rotate around X axis (vertical)
+                        const y2 = y1 * Math.cos(verticalAngle) - zRotated * Math.sin(verticalAngle);
+                        const z3 = y1 * Math.sin(verticalAngle) + zRotated * Math.cos(verticalAngle);
+
+                        // Additional slight tilt for dynamic perspective
+                        const y3 = y2 * Math.cos(verticalTilt) - z3 * Math.sin(verticalTilt);
+                        const z4 = y2 * Math.sin(verticalTilt) + z3 * Math.cos(verticalTilt);
+
+                        // Perspective projection - viewer at fixed distance
+                        const D = 1 / (z4 + 3); 
+                        const screenX = Math.floor(width/2 + 40 * D * x2); 
+                        const screenY = Math.floor(height/2 + 25 * D * y3); 
+                        const o = screenX + width * screenY;
+
+                        if (screenY > 0 && screenY < height && screenX > 0 && screenX < width && D > z[o]) {
+                                z[o] = D;
+                                b[o] = fixedChar || '.:-=+*#%@'[brightness > 0 ? brightness : 0];
+                        }
+                };
+
+                // --- Pass 1: Sphere ---
+                const sphereRadius = 1.5;
                 for (let j = 0; j < 6.28; j += 0.03) { 
                         for (let i = 0; i < 6.28; i += 0.01) { 
-                                // Saturn: sphere + ring
-                                
-                                // Sphere part
-                                const sphereRadius = 1.5;
-                                const x = sphereRadius * Math.sin(j) * Math.cos(i);
-                                const y = sphereRadius * Math.sin(j) * Math.sin(i);
-                                const z1 = sphereRadius * Math.cos(j);
-                                
+                                const x1 = sphereRadius * Math.sin(j) * Math.cos(i);
+                                const y1 = sphereRadius * Math.sin(j) * Math.sin(i);
+                                const zOriginal = sphereRadius * Math.cos(j);
+                                projectPoint(x1, y1, zOriginal);
+                        }
+                }
 
-                                // Ring part - create single solid ring
-                                const ringInnerRadius = 2;
-                                const ringOuterRadius = 1.5;
-                                
-                                let ringX = 0, ringY = 0, ringZ = 0;
-                                let isRingPoint = false;
-                                
-                                // Create ring as a solid circular band
-                                // Use j for the ring angle, i for the radial thickness
-                                if (Math.abs(y) < 0.03) { // Create ring at equator (y near 0)
-                                        const ringRadius = ringInnerRadius + (ringOuterRadius - ringInnerRadius) * (i / 6.28);
-                                        ringX = ringRadius * Math.cos(j);
-                                        ringY = 0; // Ring is perfectly flat
-                                        ringZ = ringRadius * Math.sin(j);
-                                        isRingPoint = true;
-                                }
-                                
-                                // Choose between sphere and ring
-                                const useSphere = !isRingPoint;
-
-                                const x1 = useSphere ? x : ringX;
-                                const y1 = useSphere ? y : ringY;
-                                const zOriginal = useSphere ? z1 : ringZ;
-                                
-                                // Calculate lighting on unrotated object (fixed light source)
-                                const normalUnrotated = Math.sqrt(x1 * x1 + y1 * y1 + zOriginal * zOriginal);
-                                // Light coming from top-right in world coordinates
-                                const worldLightX = 1;
-                                const worldLightY = -1;
-                                const worldLightZ = 0.5;
-                                const lightMagnitude = Math.sqrt(worldLightX * worldLightX + worldLightY * worldLightY + worldLightZ * worldLightZ);
-                                
-                                // Normalize light vector
-                                const normalizedLightX = worldLightX / lightMagnitude;
-                                const normalizedLightY = worldLightY / lightMagnitude;
-                                const normalizedLightZ = worldLightZ / lightMagnitude;
-                                
-                                // Calculate dot product for directional lighting
-                                const dotProduct = (x1 * normalizedLightX + y1 * normalizedLightY + zOriginal * normalizedLightZ) / normalUnrotated;
-                                const brightness = Math.floor(8 * Math.max(0, dotProduct));
-                                
-                                // Multi-axis rotation for full 3D viewing
-                                // Rotate around Y axis (horizontal)
-                                const x2 = x1 * Math.cos(horizontalAngle) - zOriginal * Math.sin(horizontalAngle);
-                                const zRotated = x1 * Math.sin(horizontalAngle) + zOriginal * Math.cos(horizontalAngle);
-                                
-                                // Rotate around X axis (vertical)
-                                const y2 = y1 * Math.cos(verticalAngle) - zRotated * Math.sin(verticalAngle);
-                                const z3 = y1 * Math.sin(verticalAngle) + zRotated * Math.cos(verticalAngle);
-                                
-                                // Additional slight tilt for dynamic perspective
-                                const y3 = y2 * Math.cos(verticalTilt) - z3 * Math.sin(verticalTilt);
-                                const z4 = y2 * Math.sin(verticalTilt) + z3 * Math.cos(verticalTilt);
-                                
-                                // Perspective projection - viewer at fixed distance
-                                const D = 1 / (z4 + 3); 
-                                const screenX = Math.floor(width/2 + 40 * D * x2); 
-                                const screenY = Math.floor(height/2 + 25 * D * y3); 
-                                const o = screenX + width * screenY;
-                                
-                                if (screenY > 0 && screenY < height && screenX > 0 && screenX < width && D > z[o]) {
-                                        z[o] = D;
-                                        //        .-,~:=;!*#$@
-                                        b[o] = '.:-=+*#%@'[brightness > 0 ? brightness : 0];
-                                }
+                // --- Pass 2: Ring (flat annulus in the XZ plane, y=0) ---
+                const ringInner = 2.0;
+                const ringOuter = 3.0;
+                for (let theta = 0; theta < 6.28; theta += 0.01) {
+                        for (let r = ringInner; r <= ringOuter; r += 0.04) {
+                                const x1 = r * Math.cos(theta);
+                                const y1 = 0;
+                                const zOriginal = r * Math.sin(theta);
+                                projectPoint(x1, y1, zOriginal, '#');
                         }
                 }
                 

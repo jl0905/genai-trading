@@ -13,6 +13,8 @@
     "start": "concurrently \"npm run server:dev\" \"npm run dev\""
   },
   "dependencies": {
+    "@splinetool/react-spline": "^4.1.0",
+    "@splinetool/runtime": "^1.12.92",
     "@tailwindcss/vite": "^4.2.2",
     "chart.js": "^4.5.1",
     "chartjs-chart-financial": "^0.2.1",
@@ -21,7 +23,8 @@
     "react": "^19.2.4",
     "react-chartjs-2": "^5.3.1",
     "react-dom": "^19.2.4",
-    "tailwindcss": "^4.2.2"
+    "tailwindcss": "^4.2.2",
+    "three": "^0.184.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
