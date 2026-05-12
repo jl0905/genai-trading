@@ -125,23 +125,23 @@ function App() {
           <div style={{ marginRight: 'auto', paddingLeft: '20px', display: 'flex', alignItems: 'center' }}>
             <button
               onClick={toggleTheme}
-              className="relative inline-flex h-7 w-14 items-center rounded-full transition-colors duration-300 focus:outline-none cursor-pointer border-none"
-              style={{ backgroundColor: theme === 'dark' ? 'var(--accent)' : 'var(--border-main)' }}
+              className="relative inline-flex h-5 w-10 items-center rounded-full transition-colors duration-300 focus:outline-none cursor-pointer border-none"
+              style={{ backgroundColor: theme === 'dark' ? 'var(--border-main)' : 'var(--accent)' }}
               title="Toggle Light/Dark Mode"
             >
               <span className="sr-only">Toggle theme</span>
               <span
-                className={`flex items-center justify-center h-5 w-5 transform rounded-full bg-white transition-transform duration-300 shadow-sm ${
-                  theme === 'dark' ? 'translate-x-8' : 'translate-x-1'
+                className={`flex items-center justify-center h-4 w-4 transform rounded-full bg-white transition-transform duration-300 shadow-sm ${
+                  theme === 'dark' ? 'translate-x-[2px]' : 'translate-x-[22px]'
                 }`}
               >
                 <span style={{ 
-                  fontSize: '13px', 
+                  fontSize: '12px', 
                   lineHeight: 1, 
                   fontWeight: '900',
-                  color: theme === 'dark' ? 'var(--accent)' : '#000000' 
+                  color: theme === 'dark' ? '#000000' : 'var(--accent)' 
                 }}>
-                  {theme === 'dark' ? '☾' : '☀'}
+                  {theme === 'dark' ? '−' : '+'}
                 </span>
               </span>
             </button>
