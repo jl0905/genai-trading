@@ -4,6 +4,18 @@
   box-sizing: border-box;
 }
 
+/* Hide native number input spinners so custom arrow buttons are used */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Hide scrollbars in strategy builder panels (Webkit) */
+.strategy-panel::-webkit-scrollbar {
+  display: none;
+}
+
 body {
   font-family: var(--font-main);
   background-color: var(--bg-main);

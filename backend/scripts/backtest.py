@@ -83,15 +83,58 @@ def _macd_line(closes: list[float]) -> list[float | None]:
     return result
 
 
+def _macd_signal(closes: list[float]) -> list[float | None]:
+    """Returns the MACD Signal line (EMA 9 of the MACD line)."""
+    macd = _macd_line(closes)
+    # Extract only non-None values, compute EMA 9, then map back
+    signal: list[float | None] = [None] * len(macd)
+    period = 9
+    # Find the first valid MACD index
+    valid_indices = [i for i, v in enumerate(macd) if v is not None]
+    if len(valid_indices) < period:
+        return signal
+    # Seed with SMA of first `period` valid MACD values
+    seed_indices = valid_indices[:period]
+    seed = sum(macd[i] for i in seed_indices) / period
+    k = 2.0 / (period + 1)
+    signal[seed_indices[-1]] = seed
+    ema_val = seed
+    for j in range(period, len(valid_indices)):
+        idx = valid_indices[j]
+        ema_val = macd[idx] * k + ema_val * (1 - k)
+        signal[idx] = ema_val
+    return signal
+
+
+def _bollinger_bands(closes: list[float], period: int = 20, num_std: float = 2.0
+                     ) -> tuple[list[float | None], list[float | None]]:
+    """Returns (upper_band, lower_band) Bollinger Bands."""
+    sma = _sma(closes, period)
+    upper: list[float | None] = [None] * len(closes)
+    lower: list[float | None] = [None] * len(closes)
+    for i in range(period - 1, len(closes)):
+        window = closes[i - period + 1 : i + 1]
+        mean = sma[i]
+        variance = sum((x - mean) ** 2 for x in window) / period
+        std = variance ** 0.5
+        upper[i] = mean + num_std * std
+        lower[i] = mean - num_std * std
+    return upper, lower
+
+
 def _build_indicator_series(closes: list[float]) -> dict[str, list[float | None]]:
+    bb_upper, bb_lower = _bollinger_bands(closes, 20, 2.0)
     return {
-        "SMA 20":   _sma(closes, 20),
-        "SMA 50":   _sma(closes, 50),
-        "SMA 200":  _sma(closes, 200),
-        "EMA 20":   _ema(closes, 20),
-        "RSI 14":   _rsi(closes, 14),
-        "MACD":     _macd_line(closes),
-        "Price":    [float(c) for c in closes],   # always available
+        "SMA 20":       _sma(closes, 20),
+        "SMA 50":       _sma(closes, 50),
+        "SMA 200":      _sma(closes, 200),
+        "EMA 20":       _ema(closes, 20),
+        "RSI 14":       _rsi(closes, 14),
+        "MACD":         _macd_line(closes),
+        "MACD Signal":  _macd_signal(closes),
+        "BB Upper":     bb_upper,
+        "BB Lower":     bb_lower,
+        "Price":        [float(c) for c in closes],   # always available
     }
 
 
@@ -168,11 +211,33 @@ def run_backtest(
     if not data or len(data) < 2:
         return {"success": False, "error": "Not enough data to run a backtest (need at least 2 bars)."}
 
-    # Use median price (High + Low) / 2 as the cost basis
-    closes = [(float(d["high"]) + float(d["low"])) / 2 for d in data]
+    # Use the actual closing price for indicator computation and trade execution
+    closes = [float(d["price"]) for d in data]
     dates  = [d["date"] for d in data]
 
     series = _build_indicator_series(closes)
+
+    # ---- Validate: enough data for the indicators referenced in rules ----
+    INDICATOR_MIN_BARS = {
+        "SMA 20": 20, "SMA 50": 50, "SMA 200": 200,
+        "EMA 20": 20, "RSI 14": 15, "MACD": 26,
+        "MACD Signal": 35, "BB Upper": 20, "BB Lower": 20,
+        "Price": 1,
+    }
+    for rule in rules:
+        for key in ("indicator", "value"):
+            name = rule.get(key, "")
+            min_bars = INDICATOR_MIN_BARS.get(name)
+            if min_bars and len(data) < min_bars:
+                return {
+                    "success": False,
+                    "error": (
+                        f"Not enough data for {name} — it needs at least "
+                        f"{min_bars} bars, but only {len(data)} bars were "
+                        f"returned for this date range. Try widening the "
+                        f"start/end dates."
+                    ),
+                }
 
     # ---- Simulation state ----
     cash: float   = initial_capital

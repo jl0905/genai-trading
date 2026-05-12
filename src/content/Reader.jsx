@@ -385,7 +385,7 @@ export default function Reader({ isActive = false }) {
       color: '#ffffff',
       overflow: 'hidden',
     }}>
-      <div className="table-of-contents" style={{
+      <div className="table-of-contents reader-scroll-hidden" style={{
         width: '220px',
         borderRight: '1px solid #333333',
         overflowY: 'auto',
