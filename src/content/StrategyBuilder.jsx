@@ -6,7 +6,7 @@ import { api } from '../api.js';
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-const INDICATOR_OPTIONS = ['SMA 20', 'SMA 50', 'SMA 200', 'EMA 20', 'RSI 14', 'MACD', 'Price'];
+const INDICATOR_OPTIONS = ['SMA 20', 'SMA 50', 'SMA 200', 'EMA 20', 'RSI 14', 'MACD', 'MACD Signal', 'BB Upper', 'BB Lower', 'Price'];
 const CONDITIONS = ['Crosses Above', 'Crosses Below', 'Is Greater Than', 'Is Less Than', 'Equals'];
 const ACTIONS = ['Buy', 'Sell', 'Close Position', 'Do Nothing'];
 
@@ -203,6 +203,16 @@ const StrategyBuilder = () => {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
+  // Safe month-step helper: clamps to last day of target month to avoid
+  // JS Date overflow (e.g. Jan 31 + 1 month → Feb 28, not Mar 3).
+  const stepMonth = (dateStr, delta) => {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const target = new Date(y, m - 1 + delta, 1); // 1st of target month
+    const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+    target.setDate(Math.min(d, lastDay));
+    return target.toISOString().split('T')[0];
+  };
+
   const [rules, setRules] = useState([]);
   const [settings, setSettings] = useState({
     symbol: 'AAPL',
@@ -213,7 +223,7 @@ const StrategyBuilder = () => {
   const [isBacktesting, setIsBacktesting] = useState(false);
   const [results, setResults] = useState(null);
   const [backtestError, setBacktestError] = useState(null);
-  
+
   const requestRef = useRef(0);
   const debounceRef = useRef(null);
 
@@ -236,34 +246,84 @@ const StrategyBuilder = () => {
     // reliably produce trades on real OHLCV data.
     const STRATEGY_TEMPLATES = [
       // Moving-average crossovers
-      { buy: { indicator: 'SMA 50',  condition: 'Crosses Above', value: 'SMA 200' },
-        sell: { indicator: 'SMA 50',  condition: 'Crosses Below', value: 'SMA 200' } },
-      { buy: { indicator: 'SMA 20',  condition: 'Crosses Above', value: 'SMA 50' },
-        sell: { indicator: 'SMA 20',  condition: 'Crosses Below', value: 'SMA 50' } },
-      { buy: { indicator: 'EMA 20',  condition: 'Crosses Above', value: 'SMA 50' },
-        sell: { indicator: 'EMA 20',  condition: 'Crosses Below', value: 'SMA 50' } },
+      {
+        buy: { indicator: 'SMA 50', condition: 'Crosses Above', value: 'SMA 200' },
+        sell: { indicator: 'SMA 50', condition: 'Crosses Below', value: 'SMA 200' }
+      },
+      {
+        buy: { indicator: 'SMA 20', condition: 'Crosses Above', value: 'SMA 50' },
+        sell: { indicator: 'SMA 20', condition: 'Crosses Below', value: 'SMA 50' }
+      },
+      {
+        buy: { indicator: 'EMA 20', condition: 'Crosses Above', value: 'SMA 50' },
+        sell: { indicator: 'EMA 20', condition: 'Crosses Below', value: 'SMA 50' }
+      },
       // Price vs moving average
-      { buy: { indicator: 'Price',   condition: 'Crosses Above', value: 'SMA 50' },
-        sell: { indicator: 'Price',   condition: 'Crosses Below', value: 'SMA 50' } },
-      { buy: { indicator: 'Price',   condition: 'Crosses Above', value: 'SMA 200' },
-        sell: { indicator: 'Price',   condition: 'Crosses Below', value: 'SMA 200' } },
-      { buy: { indicator: 'Price',   condition: 'Crosses Above', value: 'EMA 20' },
-        sell: { indicator: 'Price',   condition: 'Crosses Below', value: 'EMA 20' } },
-      { buy: { indicator: 'Price',   condition: 'Crosses Above', value: 'SMA 20' },
-        sell: { indicator: 'Price',   condition: 'Crosses Below', value: 'SMA 20' } },
+      {
+        buy: { indicator: 'Price', condition: 'Crosses Above', value: 'SMA 50' },
+        sell: { indicator: 'Price', condition: 'Crosses Below', value: 'SMA 50' }
+      },
+      {
+        buy: { indicator: 'Price', condition: 'Crosses Above', value: 'SMA 200' },
+        sell: { indicator: 'Price', condition: 'Crosses Below', value: 'SMA 200' }
+      },
+      {
+        buy: { indicator: 'Price', condition: 'Crosses Above', value: 'EMA 20' },
+        sell: { indicator: 'Price', condition: 'Crosses Below', value: 'EMA 20' }
+      },
+      {
+        buy: { indicator: 'Price', condition: 'Crosses Above', value: 'SMA 20' },
+        sell: { indicator: 'Price', condition: 'Crosses Below', value: 'SMA 20' }
+      },
       // RSI thresholds (oversold / overbought)
-      { buy: { indicator: 'RSI 14',  condition: 'Crosses Above', value: '30' },
-        sell: { indicator: 'RSI 14',  condition: 'Crosses Below', value: '70' } },
-      { buy: { indicator: 'RSI 14',  condition: 'Is Less Than',  value: '25' },
-        sell: { indicator: 'RSI 14',  condition: 'Is Greater Than', value: '75' } },
+      {
+        buy: { indicator: 'RSI 14', condition: 'Crosses Above', value: '30' },
+        sell: { indicator: 'RSI 14', condition: 'Crosses Below', value: '70' }
+      },
+      {
+        buy: { indicator: 'RSI 14', condition: 'Is Less Than', value: '25' },
+        sell: { indicator: 'RSI 14', condition: 'Is Greater Than', value: '75' }
+      },
       // MACD zero-line cross
-      { buy: { indicator: 'MACD',    condition: 'Crosses Above', value: '0' },
-        sell: { indicator: 'MACD',    condition: 'Crosses Below', value: '0' } },
+      {
+        buy: { indicator: 'MACD', condition: 'Crosses Above', value: '0' },
+        sell: { indicator: 'MACD', condition: 'Crosses Below', value: '0' }
+      },
+      // Fast EMA vs long-term SMA — trend filter + timing
+      {
+        buy: { indicator: 'EMA 20', condition: 'Crosses Above', value: 'SMA 200' },
+        sell: { indicator: 'EMA 20', condition: 'Crosses Below', value: 'SMA 200' }
+      },
+      // Medium vs long-term SMA crossover
+      {
+        buy: { indicator: 'SMA 20', condition: 'Crosses Above', value: 'SMA 200' },
+        sell: { indicator: 'SMA 20', condition: 'Crosses Below', value: 'SMA 200' }
+      },
+      // RSI midline momentum direction
+      {
+        buy: { indicator: 'RSI 14', condition: 'Crosses Above', value: '50' },
+        sell: { indicator: 'RSI 14', condition: 'Crosses Below', value: '50' }
+      },
+      // Bollinger Bands mean reversion — buy at lower band, sell at upper
+      {
+        buy: { indicator: 'Price', condition: 'Crosses Below', value: 'BB Lower' },
+        sell: { indicator: 'Price', condition: 'Crosses Above', value: 'BB Upper' }
+      },
+      // Bollinger Bands breakout — buy above upper band, sell below lower
+      {
+        buy: { indicator: 'Price', condition: 'Crosses Above', value: 'BB Upper' },
+        sell: { indicator: 'Price', condition: 'Crosses Below', value: 'BB Lower' }
+      },
+      // Classic MACD / Signal line crossover
+      {
+        buy: { indicator: 'MACD', condition: 'Crosses Above', value: 'MACD Signal' },
+        sell: { indicator: 'MACD', condition: 'Crosses Below', value: 'MACD Signal' }
+      },
     ];
 
     const template = STRATEGY_TEMPLATES[Math.floor(Math.random() * STRATEGY_TEMPLATES.length)];
     setRules([
-      { id: Date.now(),     ...template.buy,  action: 'Buy' },
+      { id: Date.now(), ...template.buy, action: 'Buy' },
       { id: Date.now() + 1, ...template.sell, action: 'Sell' },
     ]);
   };
@@ -279,17 +339,17 @@ const StrategyBuilder = () => {
 
     try {
       const payload = {
-        symbol:          settings.symbol.trim().toUpperCase(),
-        start_date:      settings.startDate,
-        end_date:        settings.endDate,
+        symbol: settings.symbol.trim().toUpperCase(),
+        start_date: settings.startDate,
+        end_date: settings.endDate,
         initial_capital: parseFloat(settings.capital) || 10000,
-        rules:           rules.map(({ indicator, condition, value, action }) => ({
+        rules: rules.map(({ indicator, condition, value, action }) => ({
           indicator, condition, value, action,
         })),
       };
 
       const data = await api.runBacktest(payload);
-      
+
       if (currentRequestId !== requestRef.current) return;
 
       if (data.success) {
@@ -340,7 +400,8 @@ const StrategyBuilder = () => {
     panel: {
       backgroundColor: 'var(--bg-panel)', borderRadius: '12px', padding: '20px',
       border: '1px solid var(--border-main)', display: 'flex', flexDirection: 'column',
-      gap: '16px', overflowY: 'auto',
+      gap: '16px', overflowY: 'auto', overflowX: 'hidden',
+      scrollbarWidth: 'none', /* Firefox */
     },
     input: {
       backgroundColor: 'var(--bg-main)', color: 'var(--text-main)',
@@ -372,7 +433,7 @@ const StrategyBuilder = () => {
   return (
     <div style={s.container}>
       {/* ── LEFT PANEL ─────────────────────────────────────────────────── */}
-      <div style={{ ...s.panel, flex: '0 0 420px' }}>
+      <div className="strategy-panel" style={{ ...s.panel, flex: '0 0 460px' }}>
         <h2 style={{ margin: 0, fontSize: '1.4rem' }}>Strategy Builder</h2>
         <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.875rem' }}>
           Define IF/THEN rules and backtest them against real OHLCV data.
@@ -395,12 +456,34 @@ const StrategyBuilder = () => {
             </div>
             <div>
               <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>Initial Capital ($)</label>
-              <input
-                style={s.input}
-                type="number"
-                value={settings.capital}
-                onChange={(e) => setSettings({ ...settings, capital: e.target.value })}
-              />
+              <div style={{
+                display: 'flex', alignItems: 'center',
+                backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-main)', borderRadius: '6px',
+                overflow: 'hidden',
+              }}>
+                <button
+                  style={{ background: 'none', border: 'none', borderRight: '1px solid var(--border-main)', color: 'var(--text-muted)', cursor: 'pointer', padding: '8px 7px', lineHeight: 1, fontSize: '0.65rem', display: 'flex', alignItems: 'center' }}
+                  onClick={() => {
+                    const val = Math.max(0, (parseFloat(settings.capital) || 0) - 1000);
+                    setSettings({ ...settings, capital: String(val) });
+                  }}
+                  title="-$1,000"
+                >◀</button>
+                <input
+                  style={{ ...s.input, border: 'none', borderRadius: 0, flex: 1, minWidth: 0, MozAppearance: 'textfield', appearance: 'textfield' }}
+                  type="number"
+                  value={settings.capital}
+                  onChange={(e) => setSettings({ ...settings, capital: e.target.value })}
+                />
+                <button
+                  style={{ background: 'none', border: 'none', borderLeft: '1px solid var(--border-main)', color: 'var(--text-muted)', cursor: 'pointer', padding: '8px 7px', lineHeight: 1, fontSize: '0.65rem', display: 'flex', alignItems: 'center' }}
+                  onClick={() => {
+                    const val = (parseFloat(settings.capital) || 0) + 1000;
+                    setSettings({ ...settings, capital: String(val) });
+                  }}
+                  title="+$1,000"
+                >▶</button>
+              </div>
             </div>
             <div>
               <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>Start Date</label>
@@ -412,9 +495,7 @@ const StrategyBuilder = () => {
                 <button
                   style={{ background: 'none', border: 'none', borderRight: '1px solid var(--border-main)', color: 'var(--text-muted)', cursor: 'pointer', padding: '8px 7px', lineHeight: 1, fontSize: '0.65rem', display: 'flex', alignItems: 'center' }}
                   onClick={() => {
-                    const d = new Date(settings.startDate);
-                    d.setMonth(d.getMonth() - 1);
-                    setSettings({ ...settings, startDate: d.toISOString().split('T')[0] });
+                    setSettings({ ...settings, startDate: stepMonth(settings.startDate, -1) });
                   }}
                   title="Back 1 month"
                 >◀</button>
@@ -426,9 +507,7 @@ const StrategyBuilder = () => {
                 <button
                   style={{ background: 'none', border: 'none', borderLeft: '1px solid var(--border-main)', color: 'var(--text-muted)', cursor: 'pointer', padding: '8px 7px', lineHeight: 1, fontSize: '0.65rem', display: 'flex', alignItems: 'center' }}
                   onClick={() => {
-                    const d = new Date(settings.startDate);
-                    d.setMonth(d.getMonth() + 1);
-                    setSettings({ ...settings, startDate: d.toISOString().split('T')[0] });
+                    setSettings({ ...settings, startDate: stepMonth(settings.startDate, 1) });
                   }}
                   title="Forward 1 month"
                 >▶</button>
@@ -444,9 +523,7 @@ const StrategyBuilder = () => {
                 <button
                   style={{ background: 'none', border: 'none', borderRight: '1px solid var(--border-main)', color: 'var(--text-muted)', cursor: 'pointer', padding: '8px 7px', lineHeight: 1, fontSize: '0.65rem', display: 'flex', alignItems: 'center' }}
                   onClick={() => {
-                    const d = new Date(settings.endDate);
-                    d.setMonth(d.getMonth() - 1);
-                    setSettings({ ...settings, endDate: d.toISOString().split('T')[0] });
+                    setSettings({ ...settings, endDate: stepMonth(settings.endDate, -1) });
                   }}
                   title="Back 1 month"
                 >◀</button>
@@ -458,9 +535,7 @@ const StrategyBuilder = () => {
                 <button
                   style={{ background: 'none', border: 'none', borderLeft: '1px solid var(--border-main)', color: 'var(--text-muted)', cursor: 'pointer', padding: '8px 7px', lineHeight: 1, fontSize: '0.65rem', display: 'flex', alignItems: 'center' }}
                   onClick={() => {
-                    const d = new Date(settings.endDate);
-                    d.setMonth(d.getMonth() + 1);
-                    setSettings({ ...settings, endDate: d.toISOString().split('T')[0] });
+                    setSettings({ ...settings, endDate: stepMonth(settings.endDate, 1) });
                   }}
                   title="Forward 1 month"
                 >▶</button>
@@ -512,7 +587,7 @@ const StrategyBuilder = () => {
                     </button>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr 1fr auto 1fr', gap: '6px', alignItems: 'center' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) auto minmax(0,1fr)', gap: '6px', alignItems: 'center' }}>
                     <span style={{ fontWeight: 'bold', fontSize: '0.78rem', color: 'var(--text-muted)' }}>IF</span>
 
                     {/* Indicator (left-hand side) */}
@@ -585,7 +660,7 @@ const StrategyBuilder = () => {
       </div>
 
       {/* ── RIGHT PANEL ────────────────────────────────────────────────── */}
-      <div style={{ ...s.panel, flex: 1, minWidth: 0 }}>
+      <div className="strategy-panel" style={{ ...s.panel, flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px' }}>
           <h2 style={{ margin: 0, fontSize: '1.4rem' }}>Backtest Results</h2>
           {metrics && (

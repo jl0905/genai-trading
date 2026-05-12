@@ -94,6 +94,7 @@ export default function TvInteractiveChart({ isActive = true }) {
     sma20: true,
     sma200: false,
     ema9: false,
+    bbands: false,
     vrvp: false,
   });
 
@@ -650,6 +651,22 @@ export default function TvInteractiveChart({ isActive = true }) {
           lastValueVisible: false,
           visible: visibleIndicators.ema9,
         }),
+        bbUpper: chartRef.current.addSeries(LineSeries, {
+          color: '#f59e0b',
+          lineWidth: 1,
+          lineStyle: 2, // dashed
+          priceLineVisible: false,
+          lastValueVisible: false,
+          visible: visibleIndicators.bbands,
+        }),
+        bbLower: chartRef.current.addSeries(LineSeries, {
+          color: '#f59e0b',
+          lineWidth: 1,
+          lineStyle: 2, // dashed
+          priceLineVisible: false,
+          lastValueVisible: false,
+          visible: visibleIndicators.bbands,
+        }),
       };
 
       // Subscribe: when user scrolls/zooms near the left edge, load more
@@ -715,9 +732,14 @@ export default function TvInteractiveChart({ isActive = true }) {
     indicatorSeriesRef.current.sma20?.setData(calculateSMA(sortedStockData, 20));
     indicatorSeriesRef.current.sma200?.setData(calculateSMA(sortedStockData, 200));
     indicatorSeriesRef.current.ema9?.setData(calculateEMA(sortedStockData, 9));
+    const bbData = calculateBollingerBands(sortedStockData, 20, 2);
+    indicatorSeriesRef.current.bbUpper?.setData(bbData.upper);
+    indicatorSeriesRef.current.bbLower?.setData(bbData.lower);
     indicatorSeriesRef.current.sma20?.applyOptions({ visible: visibleIndicators.sma20 });
     indicatorSeriesRef.current.sma200?.applyOptions({ visible: visibleIndicators.sma200 });
     indicatorSeriesRef.current.ema9?.applyOptions({ visible: visibleIndicators.ema9 });
+    indicatorSeriesRef.current.bbUpper?.applyOptions({ visible: visibleIndicators.bbands });
+    indicatorSeriesRef.current.bbLower?.applyOptions({ visible: visibleIndicators.bbands });
 
     // Restore view position when prepending, or fit content on first load
     if (visibleRangeRef.current) {
@@ -877,6 +899,50 @@ export default function TvInteractiveChart({ isActive = true }) {
         time: data[i].date,
         value: Number(ema.toFixed(2)),
       });
+    }
+
+    return result;
+  };
+
+  const calculateBollingerBands = (data, period = 20, numStd = 2) => {
+    const upper = [];
+    const lower = [];
+
+    data.forEach((point, index) => {
+      if (index < period - 1) return;
+      const window = data.slice(index - period + 1, index + 1);
+      const mean = window.reduce((sum, p) => sum + p.price, 0) / period;
+      const variance = window.reduce((sum, p) => sum + (p.price - mean) ** 2, 0) / period;
+      const std = Math.sqrt(variance);
+      upper.push({ time: point.date, value: Number((mean + numStd * std).toFixed(2)) });
+      lower.push({ time: point.date, value: Number((mean - numStd * std).toFixed(2)) });
+    });
+
+    return { upper, lower };
+  };
+
+  const calculateMACDSignal = (data) => {
+    // MACD Line = EMA(12) - EMA(26)
+    const ema12Data = calculateEMA(data, 12);
+    const ema26Data = calculateEMA(data, 26);
+
+    // Align by time — build a map for EMA 26
+    const ema26Map = new Map(ema26Data.map(d => [d.time, d.value]));
+    const macdLine = ema12Data
+      .filter(d => ema26Map.has(d.time))
+      .map(d => ({ time: d.time, value: Number((d.value - ema26Map.get(d.time)).toFixed(4)) }));
+
+    if (macdLine.length < 9) return [];
+
+    // Signal Line = EMA(9) of MACD Line
+    const signalPeriod = 9;
+    const k = 2 / (signalPeriod + 1);
+    let ema = macdLine.slice(0, signalPeriod).reduce((sum, p) => sum + p.value, 0) / signalPeriod;
+    const result = [{ time: macdLine[signalPeriod - 1].time, value: Number(ema.toFixed(4)) }];
+
+    for (let i = signalPeriod; i < macdLine.length; i += 1) {
+      ema = (macdLine[i].value - ema) * k + ema;
+      result.push({ time: macdLine[i].time, value: Number(ema.toFixed(4)) });
     }
 
     return result;
@@ -1191,6 +1257,7 @@ export default function TvInteractiveChart({ isActive = true }) {
               { id: 'sma20', label: 'SMA 20', color: '#f59e0b' },
               { id: 'sma200', label: 'SMA 200', color: '#3b82f6' },
               { id: 'ema9', label: 'EMA 9', color: '#a855f7' },
+              { id: 'bbands', label: 'BB', color: '#f59e0b' },
               { id: 'vrvp', label: 'VRVP', color: 'var(--theme-primary)' },
             ].map((indicator) => (
               <button

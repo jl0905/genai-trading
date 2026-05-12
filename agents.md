@@ -1,6 +1,6 @@
 # GenAI Trading Dashboard - Agent Reference
 
-A React-based financial dashboard with real-time stock charts and technical analysis for the 2026 GenAI final project.
+A React-based financial dashboard with real-time stock charts, technical analysis, rule-based strategy backtesting, paper trading integration, and educational resources for the 2026 GenAI final project.
 
 ## Tech Stack & Versions
 
@@ -8,48 +8,58 @@ A React-based financial dashboard with real-time stock charts and technical anal
 - React (`^19.2.4`) & React DOM (`^19.2.4`)
 - Vite (`^8.0.1`) with `@vitejs/plugin-react` (`^6.0.1`)
 - TailwindCSS (`^4.2.2`) with `@tailwindcss/vite` (`^4.2.2`)
+- lightweight-charts (`^5.1.0`)
 - Chart.js (`^4.5.1`) & `react-chartjs-2` (`^5.3.1`)
 - chartjs-plugin-annotation (`^3.1.0`)
 - chartjs-chart-financial (`^0.2.1`)
-- lightweight-charts (`^5.1.0`)
+- concurrently (`^9.2.1`) for concurrent dev server management
 
 **Backend & Scripts:**
 - FastAPI & Uvicorn (Runs on Port 3000)
 - Python integration natively via `main.py`
-- Python Scripts: `yfinance`, `requests`, `python-dotenv`
+- Python Scripts & Packages: `yfinance`, `requests`, `python-dotenv`, `pymongo`, `pydantic`
+- Database Integration: MongoDB (local connection on `mongodb://localhost:27017/` for user authentication storage)
 - AI Integration: OpenRouter Tencent Hy3 Preview API (`tencent/hy3-preview:free`) via REST — requires `OPENROUTER_API_KEY` in `.env`
+- Alpaca API Integration: For paper trading dashboard, simulated orders, and market-data volume profiles — configured in `alpaca_config.py`
 
 ## Project Structure
-- `src/`: React frontend (`App.jsx` handles 8 tabs, `api.js` connects to backend).
-- `src/content/`: Tab components (e.g., `InteractiveChart.jsx`, `tvInteractiveChart.jsx`, `StrategyBuilder.jsx`).
-- `backend/main.py`: FastAPI server acting as the backend.
-- `backend/scripts/`: Python scripts for data fetching (`stockdata.py`, `googlefin.py`), AI analysis (`chart_analyzer.py`), and backtesting (`backtest.py`).
-- `.env`: Environment variables (not committed) — holds `OPENROUTER_API_KEY`.
+- `src/`: React frontend (`App.jsx` dynamically manages 5 core functional tabs with HTML5 drag-and-drop tab reordering; `api.js` connects to the backend endpoints).
+- `src/content/`: Tab components (`EntryVisual.jsx`, `tvInteractiveChart.jsx`, `PaperTrading.jsx`, `StrategyBuilder.jsx`, `Reader.jsx`) and supportive UI subcomponents.
+- `backend/main.py`: FastAPI application server serving all client-side data queries, integration tasks, backtesting simulations, and authentication flows.
+- `backend/scripts/`: Python utility modules for data fetching (`stockdata.py`, `googlefin.py`), AI analysis formatting (`chart_analyzer.py`), pure-Python backtesting (`backtest.py`), and broker integrations (`alpaca_config.py`).
+- `.env`: Environment variables file located at the project root (not committed) — securely retains `OPENROUTER_API_KEY`.
 
 ## Essential Commands & Endpoints
-- **Start App**: `npm run start` (Runs both frontend and backend concurrently). *Note: Making edits to the backend python scripts means we have to re-run `npm start` to see the changes.*
+- **Start App**: `npm run start` (Runs both frontend dev server and FastAPI backend concurrently via `concurrently`). *Note: Modifying backend Python scripts requires terminating and re-running `npm start` to apply server-side updates.*
 - **Backend APIs** (localhost:3000): 
-  - `GET /api/stock?symbol=AAPL&period=6mo`
-  - `GET /api/stock/range?symbol=AAPL&start=2024-01-01&end=2024-07-01` — Date-range fetch for dynamic chart loading
-  - `GET /api/stocks/multi`
-  - `GET /api/googlefin`
-  - `GET /api/search?q=AAPL` — Proxies Yahoo Finance search, filters to US equities & ETFs only (exchanges: NMS, NYQ, ASE, PNK, NYM, NCM, NGS, OEM, OQS; quoteTypes: EQUITY, ETF)
-  - `POST /api/analyze` — Sends visible OHLCV data to OpenRouter LLM (Tencent Hy3) for AI technical analysis (body: `{symbol, company_name, sector, data: [{date,open,high,low,price,volume}]}`)
-  - `POST /api/backtest` — Fetches OHLCV for the given symbol/date range, runs the pure-Python rule-based backtest engine, and returns metrics + equity curve + trade log (body: `{symbol, start_date, end_date, initial_capital, rules: [{indicator, condition, value, action}]}`)
-- **Frontend APIs**: Accessible via `api.js` (e.g., `api.getStockData()`, `api.getStockDataRange()`, `api.searchStocks(query)`, `api.analyzeChart(payload)`, `api.runBacktest(payload)`).
+  - `POST /api/auth` — Minimalistic secure authentication storing SHA-256 hashed credentials in MongoDB.
+  - `GET /api/health` — API health check verification.
+  - `GET /api/googlefin` & `POST /api/googlefin` — Proxies native Bitcoin price retrieval.
+  - `GET /api/stock?symbol=AAPL&period=6mo` — Fetches standard stock historical intervals.
+  - `GET /api/stock/range?symbol=AAPL&start=2024-01-01&end=2024-07-01` — Targeted date-range extraction for responsive client dynamic rendering.
+  - `GET /api/stocks/multi` — Aggregated top stock market movers snapshot.
+  - `GET /api/search?q=AAPL` — Proxies Yahoo Finance search, intelligently filtering exclusively to US equities and ETFs.
+  - `POST /api/analyze` — Transmits currently visible OHLCV client snapshot window to OpenRouter LLM (Tencent Hy3) for AI-generated structural technical analysis.
+  - `POST /api/backtest` — Executes pure-Python rule-based strategy simulations against verified historical OHLCV data arrays returning statistical performance metrics, trade logs, and equity progression traces.
+  - `GET /api/alpaca/paper` — Interrogates configured Alpaca Paper Trading environment for portfolio valuations, current balances, active positions, and open/recent orders.
+  - `POST /api/alpaca/paper/order` — Submits paper orders directly to the Alpaca simulation broker engine.
+  - `GET /api/alpaca/volume-profile` — Computes detailed, granular Visible Range / Absolute Volume Profiles utilizing granular native trade logs or aggregated 1-minute base intervals.
+- **Frontend APIs**: Centralized asynchronous wrapper clients housed in `src/api.js` (e.g., `api.login()`, `api.getStockDataRange()`, `api.analyzeChart()`, `api.runBacktest()`, `api.getAlpacaPaperDashboard()`, `api.submitAlpacaPaperOrder()`, `api.getAlpacaVolumeProfile()`).
 
 ## Key Components
-- **InteractiveChart.jsx**: Uses Chart.js with the annotation plugin to show line/candlestick charts with peak/trough/breakout key points.
-- **TvInteractiveChart.jsx**: Uses lightweight-charts for a sleek, TradingView-style candlestick view with volume overlays. Dynamic infinite-scroll loading — starts with 6 months, loads 6-month chunks as user scrolls/zooms left. Real-time 30s background polling. **AI Analyze button** captures the visible OHLCV window and sends it to the OpenRouter API, displaying the generated technical analysis in a collapsible, resizable side-panel to the right of the chart.
-- **StrategyBuilder.jsx**: IF/THEN rule builder for defining trading strategies. On "Run Backtest", POSTs rules + settings to `/api/backtest`, which fetches real OHLCV data and runs the Python engine (`backtest.py`). Results panel shows stat cards (total return, win rate, trades, max drawdown, final equity), a real SVG equity curve, and a scrollable trade log table. Indicators: SMA 20/50/200, EMA 20, RSI 14, MACD, Price. Position sizing: all-in long-only.
+- **EntryVisual.jsx**: Renders a premium, dynamic 3D ASCII art rotating visualization of Saturn/Donut sphere and equatorial rings directly onto the canvas, functioning as an immersive high-fidelity project home component. Supports manual cursor drag multi-axis rotation smoothly transitioning to continuous autonomous momentum loops.
+- **TvInteractiveChart.jsx**: Uses lightweight-charts for a sleek, TradingView-style high-performance candlestick viewport paired with absolute volume bar overlays. Features dynamic infinite-scroll pagination loading previous 6-month historical segments seamlessly on scroll/zoom interactions. Incorporates background live telemetry polling and an active **AI Analyze** trigger capturing user-visible window ranges to generate deep contextual insights rendered inside a resizable collateral drawer. Toggleable overlays include SMA 20, SMA 200, EMA 9, Bollinger Bands (upper/lower dashed bands), and VRVP.
+- **PaperTrading.jsx**: Alpaca simulation gateway panel rendering active portfolio summaries (Buying Power, Cash, Portfolio Value), granular dynamic datatables mapping live paper positions/unrealized P&L, chronologically organized historical order registries, and dedicated forms supporting customized simulated order execution (Symbol, Side, Quantity).
+- **StrategyBuilder.jsx**: Comprehensive conditional logic strategy framework builder supporting nested Indicator/Action rulesets. Incorporates advanced live UI performance optimizations including request debouncing, strict race-condition guards, custom stat card formatting (Strategy Return, Win Rate, Max Drawdown, Final Equity), responsive non-interactive static SVG equity curves, scrollable execution trade logs, a comparative **Buy & Hold** benchmark guide, and an exploratory **Randomize** scenario trigger. Supported Indicators: SMA 20/50/200, EMA 20, RSI 14, MACD, MACD Signal, BB Upper, BB Lower, Price.
+- **Reader.jsx**: Rich interactive educational guide and glossary defining fundamental market dynamics, technical structures, volume behaviors, and strategic concepts. Outfitted with custom clean scrollbar-hidden interfaces, scroll-spy intersection observers activating table of contents navigation tabs dynamically, and global messaging listeners enabling direct contextual links across auxiliary tabs.
 
 ## Important Notes
-- Frontend: Port 5173 | Backend: Port 3000.
-- Windows environment - use PowerShell or CMD.
-- API endpoints return native Python dictionaries serialized by FastAPI.
+- Frontend Dev Server runs natively on Port 5173 | Backend Server executes on Port 3000.
+- Native Windows environment alignment — execution fully compatible across PowerShell or standard Command Prompt (CMD).
+- API backends cleanly serialize native Python structures to strict JSON schemas consumed predictably by client architectures.
 
 ## Theming & Styling
-- The app uses a centralized primary color variable `var(--theme-primary)` (default: `#8BA97F` / Sage Green) for all accent colors, bullish candle wicks, volume bars, AI analysis borders, and price numbers.
-- The app uses a centralized secondary color variable `var(--theme-secondary)` (default: `#FF5A5A` / Red) for all bearish elements, downward candle wicks, and negative price numbers.
-- If you need to tweak these colors, modify `--theme-primary` / `--theme-secondary` and their RGB counterparts in `src/index.css`. JS components automatically read these variables using `getComputedStyle`.
-- **Fonts**: The global application font is controlled by the `--font-main` CSS variable in `src/index.css`. However, the interactive TradingView-style chart uses its own hardcoded font (Courier New) to keep its technical aesthetic unlinked from the rest of the UI.
+- The application implements global custom primary CSS tokens via `var(--theme-primary)` (default: `#8BA97F` / Sage Green) styling accent elements, positive asset price counters, bullish candlesticks, volume indicators, and analytical focus highlights.
+- Contrast tokening utilizes secondary configurations via `var(--theme-secondary)` (default: `#FF5A5A` / Red) assigning bold visual indicators for bearish pressure, descending pricing patterns, and critical drawdown boundaries.
+- Theme overrides execute efficiently through adjusting core root color blocks directly within `src/index.css`. Client JS elements interrogate live layout elements via standard `getComputedStyle` patterns to preserve layout rendering parity.
+- **Fonts**: Core display application text is cleanly bound to the `--font-main` CSS variable in `src/index.css`. Specialized chart components isolate display logic utilizing custom monospaced fallbacks to guarantee strict technical visual integrity.
