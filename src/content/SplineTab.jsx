@@ -4,6 +4,7 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
 import TvInteractiveChart from './tvInteractiveChart.jsx';
+import Reader from './Reader.jsx';
 import { useTheme } from '../ThemeContext.jsx';
 
 export default function SplineTab({ isActive = true }) {
@@ -376,6 +377,16 @@ export default function SplineTab({ isActive = true }) {
                 <button 
                   onClick={(e) => {
                     e.stopPropagation();
+                    setPlacedComponents([...placedComponents, { ...selectedTile, type: 'reader', id: Date.now() }]);
+                    setShowComponentMenu(false);
+                  }}
+                  className="bg-blue-600/80 hover:bg-blue-500 text-white text-xs px-4 py-2 rounded shadow-lg transition-colors cursor-pointer"
+                >
+                  Place Reader
+                </button>
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
                     setShowComponentMenu(false);
                   }}
                   className="bg-gray-600/80 hover:bg-gray-500 text-white text-xs px-4 py-2 rounded shadow-lg transition-colors cursor-pointer"
@@ -412,6 +423,7 @@ export default function SplineTab({ isActive = true }) {
               &times;
             </button>
             {comp.type === 'chart' && <TvInteractiveChart isActive={isActive} isCompact={comp.width < 100 || comp.height < 100} />}
+            {comp.type === 'reader' && <div style={{ width: '100%', height: '100%', overflow: 'auto' }}><Reader /></div>}
           </div>
         ))}
 
