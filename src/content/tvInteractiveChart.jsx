@@ -74,7 +74,7 @@ const EDUCATION_TOPICS = {
   },
 };
 
-export default function TvInteractiveChart({ isActive = true }) {
+export default function TvInteractiveChart({ isActive = true, isCompact = false }) {
   const [stockData, setStockData] = useState([]);
   const [stockInfo, setStockInfo] = useState(null);
   const [realTimeData, setRealTimeData] = useState(null);
@@ -1115,9 +1115,9 @@ export default function TvInteractiveChart({ isActive = true }) {
 
   return (
     <div style={{
-      width: '100%', height: '100%', padding: '20px',
+      width: '100%', height: '100%', padding: isCompact ? '10px' : '20px',
       backgroundColor: 'var(--bg-main)', color: 'var(--text-main)',
-      fontFamily: 'var(--font-main)', overflowY: 'auto', overflowX: 'hidden',
+      fontFamily: 'var(--font-main)', overflowY: isCompact ? 'hidden' : 'auto', overflowX: 'hidden',
       display: 'flex', flexDirection: 'column'
     }}>
       {/* Header */}
@@ -1253,57 +1253,93 @@ export default function TvInteractiveChart({ isActive = true }) {
                 : 'sma20'
             ),
           }}>
-            {[
-              { id: 'sma20', label: 'SMA 20', color: '#f59e0b' },
-              { id: 'sma200', label: 'SMA 200', color: '#3b82f6' },
-              { id: 'ema9', label: 'EMA 9', color: '#a855f7' },
-              { id: 'bbands', label: 'BB', color: '#f59e0b' },
-              { id: 'vrvp', label: 'VRVP', color: 'var(--theme-primary)' },
-            ].map((indicator) => (
-              <button
-                key={indicator.id}
-                type="button"
-                onClick={() => toggleIndicator(indicator.id)}
-                aria-pressed={visibleIndicators[indicator.id]}
+            {isCompact ? (
+              <select
+                onChange={(e) => {
+                  if (e.target.value) toggleIndicator(e.target.value);
+                  e.target.value = "";
+                }}
                 style={{
-                  backgroundColor: visibleIndicators[indicator.id] ? indicator.color : 'var(--bg-main)',
-                  color: visibleIndicators[indicator.id] ? '#ffffff' : 'var(--text-main)',
-                  border: `2px solid ${visibleIndicators[indicator.id] ? indicator.color : 'var(--border-focus)'}`,
+                  backgroundColor: 'var(--bg-main)',
+                  color: 'var(--text-main)',
+                  border: '2px solid var(--border-focus)',
                   padding: '6px 10px',
                   fontFamily: 'var(--font-main)',
                   fontSize: '12px',
                   fontWeight: 'bold',
                   cursor: 'pointer',
                   textTransform: 'uppercase',
+                  outline: 'none',
                 }}
-                title={`${visibleIndicators[indicator.id] ? 'Hide' : 'Show'} ${indicator.label}`}
               >
-                {indicator.label}
-              </button>
-            ))}
+                <option value="">Indicators</option>
+                {[
+                  { id: 'sma20', label: 'SMA 20' },
+                  { id: 'sma200', label: 'SMA 200' },
+                  { id: 'ema9', label: 'EMA 9' },
+                  { id: 'bbands', label: 'BB' },
+                  { id: 'vrvp', label: 'VRVP' },
+                ].map(ind => (
+                  <option key={ind.id} value={ind.id}>
+                    {visibleIndicators[ind.id] ? '✓ ' : ''}{ind.label}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              [
+                { id: 'sma20', label: 'SMA 20', color: '#f59e0b' },
+                { id: 'sma200', label: 'SMA 200', color: '#3b82f6' },
+                { id: 'ema9', label: 'EMA 9', color: '#a855f7' },
+                { id: 'bbands', label: 'BB', color: '#f59e0b' },
+                { id: 'vrvp', label: 'VRVP', color: 'var(--theme-primary)' },
+              ].map((indicator) => (
+                <button
+                  key={indicator.id}
+                  type="button"
+                  onClick={() => toggleIndicator(indicator.id)}
+                  aria-pressed={visibleIndicators[indicator.id]}
+                  style={{
+                    backgroundColor: visibleIndicators[indicator.id] ? indicator.color : 'var(--bg-main)',
+                    color: visibleIndicators[indicator.id] ? '#ffffff' : 'var(--text-main)',
+                    border: `2px solid ${visibleIndicators[indicator.id] ? indicator.color : 'var(--border-focus)'}`,
+                    padding: '6px 10px',
+                    fontFamily: 'var(--font-main)',
+                    fontSize: '12px',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    textTransform: 'uppercase',
+                  }}
+                  title={`${visibleIndicators[indicator.id] ? 'Hide' : 'Show'} ${indicator.label}`}
+                >
+                  {indicator.label}
+                </button>
+              ))
+            )}
           </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              setShowEducation((current) => !current);
-              setSelectedEducationTopic('stockChart');
-            }}
-            aria-pressed={showEducation}
-            style={{
-              backgroundColor: showEducation ? 'var(--theme-primary)' : 'var(--bg-main)',
-              color: showEducation ? 'var(--bg-main)' : 'var(--text-main)',
-              border: `2px solid ${showEducation ? 'var(--theme-primary)' : 'var(--border-focus)'}`,
-              padding: '6px 12px',
-              fontFamily: 'var(--font-main)',
-              fontSize: '12px',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              textTransform: 'uppercase',
-            }}
-          >
-            Educate {showEducation ? 'On' : 'Off'}
-          </button>
+          {!isCompact && (
+            <button
+              type="button"
+              onClick={() => {
+                setShowEducation((current) => !current);
+                setSelectedEducationTopic('stockChart');
+              }}
+              aria-pressed={showEducation}
+              style={{
+                backgroundColor: showEducation ? 'var(--theme-primary)' : 'var(--bg-main)',
+                color: showEducation ? 'var(--bg-main)' : 'var(--text-main)',
+                border: `2px solid ${showEducation ? 'var(--theme-primary)' : 'var(--border-focus)'}`,
+                padding: '6px 12px',
+                fontFamily: 'var(--font-main)',
+                fontSize: '12px',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                textTransform: 'uppercase',
+              }}
+            >
+              Educate {showEducation ? 'On' : 'Off'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -1359,7 +1395,7 @@ export default function TvInteractiveChart({ isActive = true }) {
             </div>
           )}
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '20px' }}>
-            {visibleRangeInfo && (
+            {!isCompact && visibleRangeInfo && (
               <div style={{ textAlign: 'right', borderRight: '1px solid var(--border-main)', paddingRight: '20px' }}>
                 <div style={{ color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase' }}>Visible Window</div>
                 <div style={{ fontSize: '12px', fontWeight: 'bold' }}>
@@ -1372,52 +1408,57 @@ export default function TvInteractiveChart({ isActive = true }) {
                 </div>
               </div>
             )}
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase' }}>Last Updated</div>
-              <div style={{ fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
-                {lastUpdate?.toLocaleTimeString() || 'N/A'}
-                {isLoadingMore && <span style={{ color: 'var(--theme-primary)', fontSize: '11px' }} title="Loading older data...">⟳</span>}
+            
+            {!isCompact && (
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase' }}>Last Updated</div>
+                <div style={{ fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
+                  {lastUpdate?.toLocaleTimeString() || 'N/A'}
+                  {isLoadingMore && <span style={{ color: 'var(--theme-primary)', fontSize: '11px' }} title="Loading older data...">⟳</span>}
+                </div>
+                {loading && <div style={{ color: 'var(--theme-primary)', fontSize: '11px' }}>Updating...</div>}
               </div>
-              {loading && <div style={{ color: 'var(--theme-primary)', fontSize: '11px' }}>Updating...</div>}
-            </div>
+            )}
 
-            <button
-              onClick={analyzeVisibleRange}
-              disabled={analysisLoading}
-              style={{
-                backgroundColor: analysisLoading ? 'var(--bg-panel)' : 'var(--text-main)',
-                color: analysisLoading ? 'var(--text-muted)' : 'var(--bg-main)',
-                border: '2px solid var(--border-focus)',
-                padding: '8px 14px',
-                fontFamily: 'var(--font-main)',
-                fontSize: '12px',
-                fontWeight: 'bold',
-                cursor: analysisLoading ? 'not-allowed' : 'pointer',
-                textTransform: 'uppercase',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                opacity: analysisLoading ? 0.6 : 1,
-                transition: 'all 0.2s ease'
-              }}
-            >
-              {analysisLoading ? (
-                <>
-                  <span style={{
-                    display: 'inline-block', width: '12px', height: '12px',
-                    border: '2px solid var(--text-muted)', borderTopColor: 'transparent',
-                    borderRadius: '50%',
-                    animation: 'ai-spin 0.8s linear infinite',
-                  }} />
-                  Analyzing…
-                </>
-              ) : (
-                <>
-                  <span style={{ fontSize: '14px' }}>✦</span>
-                  AI Analyze
-                </>
-              )}
-            </button>
+            {!isCompact && (
+              <button
+                onClick={analyzeVisibleRange}
+                disabled={analysisLoading}
+                style={{
+                  backgroundColor: analysisLoading ? 'var(--bg-panel)' : 'var(--text-main)',
+                  color: analysisLoading ? 'var(--text-muted)' : 'var(--bg-main)',
+                  border: '2px solid var(--border-focus)',
+                  padding: '8px 14px',
+                  fontFamily: 'var(--font-main)',
+                  fontSize: '12px',
+                  fontWeight: 'bold',
+                  cursor: analysisLoading ? 'not-allowed' : 'pointer',
+                  textTransform: 'uppercase',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  opacity: analysisLoading ? 0.6 : 1,
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                {analysisLoading ? (
+                  <>
+                    <span style={{
+                      display: 'inline-block', width: '12px', height: '12px',
+                      border: '2px solid var(--text-muted)', borderTopColor: 'transparent',
+                      borderRadius: '50%',
+                      animation: 'ai-spin 0.8s linear infinite',
+                    }} />
+                    Analyzing…
+                  </>
+                ) : (
+                  <>
+                    <span style={{ fontSize: '14px' }}>✦</span>
+                    AI Analyze
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -1660,7 +1701,7 @@ export default function TvInteractiveChart({ isActive = true }) {
         </div>
 
         {/* AI Analysis Panel — right side */}
-        {showAnalysis ? (
+        {showAnalysis && !isCompact ? (
           <div style={{
             width: `${panelWidth}px`,
             flexShrink: 0,

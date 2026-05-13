@@ -21,7 +21,7 @@ const tabComponents = {
 // Tab configuration - easy to modify and extend
 const initialTabs = [
   { id: 'entryVisual', name: 'Home', component: tabComponents.entryVisual },
-  { id: 'spline', name: 'Spline', component: tabComponents.spline },
+  { id: 'spline', name: 'Multi', component: tabComponents.spline },
   { id: 'tvInteractiveChart', name: 'Charts', component: tabComponents.tvInteractiveChart },
   { id: 'paperTrading', name: 'Paper', component: tabComponents.paperTrading },
   { id: 'strategy', name: 'Strategy', component: tabComponents.strategy },
