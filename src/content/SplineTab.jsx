@@ -50,7 +50,7 @@ export default function SplineTab({ isActive = true }) {
     // Material Polish: Full physical weight, dense light absorption, clearcoat Fresnel shell, and intense edge fringing
     const material = new THREE.MeshPhysicalMaterial({
       color: new THREE.Color('#eef4ff'), // Base light icy blue for light mode
-      transmission: 0.9, // Set to 0.9 to achieve a solid frosted interior look
+      transmission: 0.85, // Set to 0.9 to achieve a solid frosted interior look
       opacity: 1.0, // Retain guaranteed 1.0 opacity to avoid looking like flat milky plastic
       transparent: true,
       roughness: 0.15, // Slightly frosted interior depth
@@ -58,15 +58,15 @@ export default function SplineTab({ isActive = true }) {
       ior: 1.5, // Standard glass index of refraction
       dispersion: 2.5, // Elevated chromatic dispersion driving rainbow edge fringing
       thickness: 1.5, // Scaled optimally to the upgraded geometry volume
-      
+
       // The Fresnel Shell (Clearcoat): Wrapping the frosted interior in a razor-sharp, mirror-like varnish
       clearcoat: 1.0,
       clearcoatRoughness: 0.0,
-      
+
       // Add Physical Volume (CRITICAL): Dense internal light absorption giving real optical weight
       attenuationColor: new THREE.Color('#e6f2ff'), // Subtle icy blue/cyan volumetric tint
       attenuationDistance: 2.0, // Thicker parts absorb light perfectly based on cube scale
-      
+
       // High-end holographic effect parameters
       iridescence: 1.0,
       iridescenceIOR: 1.3,
@@ -78,7 +78,7 @@ export default function SplineTab({ isActive = true }) {
       const isDark = document.documentElement.classList.contains('dark');
       // Premium Slate-900 (#0f172a) for Dark Mode background, Cool Off-White (#f0f4f8) for Light Mode
       scene.background = new THREE.Color(isDark ? '#0f172a' : '#f0f4f8');
-      
+
       // Bring back the cool darker colors of the dark mode cubes:
       // Uses a cool sophisticated slate/chrome-blue tint (#334155) in dark mode, light icy blue (#eef4ff) in light mode
       material.color.set(isDark ? '#334155' : '#eef4ff');
@@ -182,10 +182,23 @@ export default function SplineTab({ isActive = true }) {
       isDragging = false;
     };
 
+    // Camera Zoom Controls via trackpad pinch-to-zoom or scroll wheel
+    const handleWheel = (e) => {
+      e.preventDefault(); // Prevents browser page zooming/scrolling while adjusting the 3D scene view
+      
+      // Adapt zoom sensitivity based on ctrlKey (active during trackpad pinch gestures) vs standard wheel
+      const zoomSpeed = e.ctrlKey ? 0.02 : 0.005;
+      camera.position.z += e.deltaY * zoomSpeed;
+      
+      // Clamp camera distance smoothly so objects remain perfectly visible and don't clip the near/far planes
+      camera.position.z = Math.max(2.5, Math.min(12.0, camera.position.z));
+    };
+
     const domElement = renderer.domElement;
     domElement.addEventListener('mousedown', handleMouseDown);
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
+    domElement.addEventListener('wheel', handleWheel, { passive: false });
 
     // 9. Responsive Window Resize Handler
     const handleResize = () => {
@@ -212,6 +225,7 @@ export default function SplineTab({ isActive = true }) {
       domElement.removeEventListener('mousedown', handleMouseDown);
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
+      domElement.removeEventListener('wheel', handleWheel);
 
       if (currentMount.contains(renderer.domElement)) {
         currentMount.removeChild(renderer.domElement);
