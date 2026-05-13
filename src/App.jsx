@@ -40,6 +40,45 @@ function App() {
   const [loginError, setLoginError] = useState('')
   const loginRef = useRef(null)
 
+  // --- Header pin/unpin ---
+  const [headerPinned, setHeaderPinned] = useState(true)
+  const [headerVisible, setHeaderVisible] = useState(true)
+  const headerRef = useRef(null)
+  const hoverZoneRef = useRef(null)
+  const hideTimeoutRef = useRef(null)
+
+  // Show header when hovering near the top edge; hide when leaving
+  useEffect(() => {
+    if (headerPinned) {
+      setHeaderVisible(true)
+      return
+    }
+    setHeaderVisible(false)
+
+    const zone = hoverZoneRef.current
+    const header = headerRef.current
+    if (!zone || !header) return
+
+    const show = () => {
+      clearTimeout(hideTimeoutRef.current)
+      setHeaderVisible(true)
+    }
+    const hide = () => {
+      hideTimeoutRef.current = setTimeout(() => setHeaderVisible(false), 300)
+    }
+
+    zone.addEventListener('mouseenter', show)
+    header.addEventListener('mouseenter', show)
+    header.addEventListener('mouseleave', hide)
+
+    return () => {
+      clearTimeout(hideTimeoutRef.current)
+      zone.removeEventListener('mouseenter', show)
+      header.removeEventListener('mouseenter', show)
+      header.removeEventListener('mouseleave', hide)
+    }
+  }, [headerPinned])
+
   useEffect(() => {
     function handleClickOutside(event) {
       if (loginRef.current && !loginRef.current.contains(event.target)) {
@@ -123,9 +162,39 @@ function App() {
 
   return (
     <div className="app">
-      <header className="header">
+      {/* Invisible hover zone at the very top — triggers header reveal when unpinned */}
+      {!headerPinned && (
+        <div
+          ref={hoverZoneRef}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: '12px',
+            zIndex: 999,
+          }}
+        />
+      )}
+      <header
+        ref={headerRef}
+        className="header"
+        style={{
+          ...(headerPinned
+            ? {}
+            : {
+                position: 'fixed',
+                top: headerVisible ? 0 : '-60px',
+                left: 0,
+                right: 0,
+                zIndex: 1000,
+                transition: 'top 0.25s ease',
+                boxShadow: headerVisible ? '0 2px 12px rgba(0,0,0,0.18)' : 'none',
+              }),
+        }}
+      >
         <nav className="tabs-container">
-          <div style={{ marginRight: 'auto', paddingLeft: '20px', display: 'flex', alignItems: 'center' }}>
+          <div style={{ marginRight: 'auto', paddingLeft: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <button
               onClick={toggleTheme}
               className="relative inline-flex h-5 w-10 items-center rounded-full transition-colors duration-300 focus:outline-none cursor-pointer border-none"
@@ -147,6 +216,45 @@ function App() {
                   {theme === 'dark' ? '−' : '+'}
                 </span>
               </span>
+            </button>
+
+            {/* Pin / Unpin header toggle */}
+            <button
+              onClick={() => setHeaderPinned(prev => !prev)}
+              title={headerPinned ? 'Unpin header' : 'Pin header'}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '2px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: headerPinned ? 0.7 : 0.45,
+                transition: 'opacity 0.2s ease',
+              }}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{ color: 'var(--text-main)' }}
+              >
+                {/* Thumbtack / push-pin icon */}
+                <path d="M12 17v5" />
+                <path d="M9 11V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v7" />
+                <path d="M7 11h10l-1 4H8l-1-4z" />
+                {/* Diagonal strike-through when unpinned */}
+                {!headerPinned && (
+                  <line x1="3" y1="3" x2="21" y2="21" stroke="var(--text-main)" strokeWidth="2.5" />
+                )}
+              </svg>
             </button>
           </div>
           
