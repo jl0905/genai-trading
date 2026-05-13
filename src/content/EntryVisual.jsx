@@ -126,7 +126,7 @@ export default function EntryVisual() {
 
 			if (screenY > 0 && screenY < height && screenX > 0 && screenX < width && D > z[o]) {
 				z[o] = D;
-				b[o] = fixedChar || '.:-=+*#%@'[brightness > 0 ? brightness : 0];
+				b[o] = fixedChar || '.:-=*+5#@'[brightness > 0 ? brightness : 0];
 			}
 		};
 
