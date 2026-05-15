@@ -1,4 +1,11 @@
-const API_BASE_URL = 'http://localhost:3000/api';
+// In production (single-origin deploy), VITE_API_URL can be left unset — '/api' works.
+// For split deploys (e.g. Vercel frontend + Render backend), set VITE_API_URL to the backend origin.
+// Locally it falls back to localhost:3000.
+const API_BASE_URL = import.meta.env.VITE_API_URL
+  ? `${import.meta.env.VITE_API_URL}/api`
+  : import.meta.env.DEV
+    ? 'http://localhost:3000/api'
+    : '/api';
 
 export const api = {
   // Authentication

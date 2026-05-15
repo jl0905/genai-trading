@@ -19,7 +19,7 @@ A React-based financial dashboard with real-time stock charts, technical analysi
 - FastAPI & Uvicorn (Runs on Port 3000)
 - Python integration natively via `main.py`
 - Python Scripts & Packages: `yfinance`, `requests`, `python-dotenv`, `pymongo`, `pydantic`
-- Database Integration: MongoDB (local connection on `mongodb://localhost:27017/` for user authentication storage)
+- Database Integration: MongoDB (configurable via `MONGODB_URI` env var, defaults to `mongodb://localhost:27017/` locally) for user authentication storage
 - AI Integration: OpenRouter Tencent Hy3 Preview API (`tencent/hy3-preview:free`) via REST — requires `OPENROUTER_API_KEY` in `.env`
 - Alpaca API Integration: For paper trading dashboard, simulated orders, and market-data volume profiles — configured in `alpaca_config.py`
 
@@ -28,6 +28,7 @@ A React-based financial dashboard with real-time stock charts, technical analysi
 - `src/content/`: Tab components (`EntryVisual.jsx`, `SplineTab.jsx`, `tvInteractiveChart.jsx`, `PaperTrading.jsx`, `StrategyBuilder.jsx`, `Reader.jsx`) and supportive UI subcomponents.
 - `backend/main.py`: FastAPI application server serving all client-side data queries, integration tasks, backtesting simulations, and authentication flows.
 - `backend/scripts/`: Python utility modules for data fetching (`stockdata.py`, `googlefin.py`), AI analysis formatting (`chart_analyzer.py`), pure-Python backtesting (`backtest.py`), and broker integrations (`alpaca_config.py`).
+- `backend/requirements.txt`: Python dependency manifest for production deployment (Render, Railway, etc.).
 - `.env`: Environment variables file located at the project root (not committed) — securely retains `OPENROUTER_API_KEY`.
 
 ## Essential Commands & Endpoints
@@ -45,7 +46,7 @@ A React-based financial dashboard with real-time stock charts, technical analysi
   - `GET /api/alpaca/paper` — Interrogates configured Alpaca Paper Trading environment for portfolio valuations, current balances, active positions, and open/recent orders.
   - `POST /api/alpaca/paper/order` — Submits paper orders directly to the Alpaca simulation broker engine.
   - `GET /api/alpaca/volume-profile` — Computes detailed, granular Visible Range / Absolute Volume Profiles utilizing granular native trade logs or aggregated 1-minute base intervals.
-- **Frontend APIs**: Centralized asynchronous wrapper clients housed in `src/api.js` (e.g., `api.login()`, `api.getStockDataRange()`, `api.analyzeChart()`, `api.runBacktest()`, `api.getAlpacaPaperDashboard()`, `api.submitAlpacaPaperOrder()`, `api.getAlpacaVolumeProfile()`).
+- **Frontend APIs**: Centralized asynchronous wrapper clients housed in `src/api.js` (e.g., `api.login()`, `api.getStockDataRange()`, `api.analyzeChart()`, `api.runBacktest()`, `api.getAlpacaPaperDashboard()`, `api.submitAlpacaPaperOrder()`, `api.getAlpacaVolumeProfile()`). The API base URL is dynamically resolved via `VITE_API_URL` env var (defaults to `http://localhost:3000` for local dev).
 
 ## Key Components
 - **EntryVisual.jsx**: Renders a premium, dynamic 3D ASCII art rotating visualization of Saturn/Donut sphere and equatorial rings directly onto the canvas, functioning as an immersive high-fidelity project home component. Supports manual cursor drag multi-axis rotation smoothly transitioning to continuous autonomous momentum loops.
@@ -59,6 +60,12 @@ A React-based financial dashboard with real-time stock charts, technical analysi
 - Frontend Dev Server runs natively on Port 5173 | Backend Server executes on Port 3000.
 - Native Windows environment alignment — execution fully compatible across PowerShell or standard Command Prompt (CMD).
 - API backends cleanly serialize native Python structures to strict JSON schemas consumed predictably by client architectures.
+
+## Deployment
+- **Unified Deploy (Render)**: A multi-stage `Dockerfile` builds the Vite frontend (Node stage) and runs the FastAPI backend (Python stage) as a single service. FastAPI serves the built `dist/` as static files alongside the `/api/*` routes. Render auto-detects the Dockerfile — set runtime to **Docker**, no root directory override needed.
+- **Split Deploy (optional)**: Frontend can be deployed separately on **Vercel** (`vite build`) with `VITE_API_URL` pointing to the backend origin. Backend deploys on Render as a Python Web Service (root: `backend/`, start: `uvicorn main:app --host 0.0.0.0 --port $PORT`).
+- **Environment Variables on Render**: `OPENROUTER_API_KEY` (required for AI analysis), `MONGODB_URI` (optional, for auth — defaults to localhost if unset).
+- `VITE_API_URL` is a **build-time** variable — only needed for split deploys. In unified mode, the frontend uses relative `/api` paths automatically.
 
 ## Theming & Styling
 - The application implements global custom primary CSS tokens via `var(--theme-primary)` (default: `#8BA97F` / Sage Green) styling accent elements, positive asset price counters, bullish candlesticks, volume indicators, and analytical focus highlights.

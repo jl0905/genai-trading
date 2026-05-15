@@ -1,7 +1,10 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Optional, List
+import pathlib
 import sys
 import os
 import requests
@@ -25,7 +28,8 @@ app = FastAPI(title="GenAI Trading Dashboard API")
 
 # MongoDB Setup
 try:
-    mongo_client = MongoClient("mongodb://localhost:27017/", serverSelectionTimeoutMS=2000)
+    mongo_uri = os.getenv("MONGODB_URI", "mongodb://localhost:27017/")
+    mongo_client = MongoClient(mongo_uri, serverSelectionTimeoutMS=2000)
     db = mongo_client["trading_dashboard"]
     users_collection = db["users"]
     # Optional: trigger a fast connection check
@@ -231,3 +235,24 @@ def get_alpaca_volume_profile(
     bins: int = 24,
 ):
     return get_volume_profile(symbol=symbol, start=start, end=end, feed=feed, bins=bins)
+
+
+# ---------------------------------------------------------------------------
+# Serve the Vite-built frontend in production (only when dist/ exists)
+# ---------------------------------------------------------------------------
+_BACKEND_DIR = pathlib.Path(__file__).resolve().parent
+_DIST_DIR = _BACKEND_DIR.parent / "dist"
+
+if _DIST_DIR.is_dir():
+    # Serve hashed asset files (JS, CSS, images) under /assets
+    _ASSETS_DIR = _DIST_DIR / "assets"
+    if _ASSETS_DIR.is_dir():
+        app.mount("/assets", StaticFiles(directory=str(_ASSETS_DIR)), name="static-assets")
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        """Catch-all: serve static files or fall back to index.html for SPA routing."""
+        file_path = _DIST_DIR / full_path
+        if full_path and file_path.is_file():
+            return FileResponse(str(file_path))
+        return FileResponse(str(_DIST_DIR / "index.html"))
