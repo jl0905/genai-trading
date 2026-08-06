@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
@@ -7,84 +7,251 @@ import TvInteractiveChart from './tvInteractiveChart.jsx';
 import Reader from './Reader.jsx';
 import { useTheme } from '../ThemeContext.jsx';
 
+// ---------------------------------------------------------------------------
+// Workspace layout: a binary split tree (tmux-style).
+// leaf  = { type: 'leaf', id, content: null | 'chart' | 'reader' }
+// split = { type: 'split', id, dir: 'row' | 'column', children: [node, node] }
+// ---------------------------------------------------------------------------
+
+let paneCounter = 0;
+const createLeaf = () => ({ type: 'leaf', id: `pane-${++paneCounter}`, content: null });
+
+function mapTree(node, id, fn) {
+  if (node.id === id) return fn(node);
+  if (node.type !== 'split') return node;
+  return { ...node, children: node.children.map((c) => mapTree(c, id, fn)) };
+}
+
+// Removing a pane promotes its sibling into the parent's slot.
+function removeLeaf(node, id) {
+  if (node.type !== 'split') return node;
+  const idx = node.children.findIndex((c) => c.id === id && c.type === 'leaf');
+  if (idx !== -1) return node.children[1 - idx];
+  return { ...node, children: node.children.map((c) => removeLeaf(c, id)) };
+}
+
+function treeHasContent(node) {
+  if (node.type === 'leaf') return node.content !== null;
+  return node.children.some(treeHasContent);
+}
+
+// Memoized so splitting/undoing elsewhere in the tree never re-renders a
+// mounted chart — chart instances are expensive to reconcile.
+const PaneBody = React.memo(function PaneBody({ content, isActive, compact }) {
+  if (content === 'chart') return <TvInteractiveChart isActive={isActive} isCompact={compact} />;
+  if (content === 'reader') {
+    return (
+      <div style={{ width: '100%', height: '100%', overflow: 'auto' }}>
+        <Reader isActive={isActive} />
+      </div>
+    );
+  }
+  return null;
+});
+
+const paneBtnStyle = {
+  fontSize: '11px',
+  fontWeight: 600,
+  fontFamily: 'var(--font-display)',
+  padding: '6px 14px',
+  borderRadius: '999px',
+  border: '1px solid var(--border-main)',
+  background: 'var(--bg-panel)',
+  color: 'var(--text-main)',
+  cursor: 'pointer',
+  boxShadow: 'var(--shadow-soft)',
+};
+
+const toolbarBtnStyle = {
+  width: '24px',
+  height: '24px',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontSize: '12px',
+  lineHeight: 1,
+  borderRadius: '6px',
+  border: '1px solid var(--border-main)',
+  background: 'var(--bg-panel)',
+  color: 'var(--text-muted)',
+  cursor: 'pointer',
+};
+
+function PaneView({ node, depth, isActive, onSplit, onSetContent, onClose, isRoot }) {
+  if (node.type === 'split') {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: node.dir,
+          width: '100%',
+          height: '100%',
+          gap: '6px',
+        }}
+      >
+        {node.children.map((child) => (
+          <div key={child.id} style={{ flex: 1, minWidth: 0, minHeight: 0 }}>
+            <PaneView
+              node={child}
+              depth={depth + 1}
+              isActive={isActive}
+              onSplit={onSplit}
+              onSetContent={onSetContent}
+              onClose={onClose}
+              isRoot={false}
+            />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const filled = node.content !== null;
+
+  return (
+    <div
+      style={{
+        position: 'relative',
+        width: '100%',
+        height: '100%',
+        borderRadius: '10px',
+        overflow: 'hidden',
+        border: filled ? '1px solid var(--border-main)' : '1px dashed var(--border-main)',
+        backgroundColor: filled ? 'var(--bg-main)' : 'transparent',
+        pointerEvents: filled ? 'auto' : 'none',
+      }}
+    >
+      {filled ? (
+        <>
+          <PaneBody content={node.content} isActive={isActive} compact={depth > 0} />
+          {/* Bottom-right so it never covers the chart's own header controls */}
+          <div
+            style={{
+              position: 'absolute',
+              bottom: '6px',
+              right: '6px',
+              zIndex: 50,
+              display: 'flex',
+              gap: '4px',
+              opacity: 0.75,
+            }}
+          >
+            <button style={toolbarBtnStyle} title="Split right" onClick={() => onSplit(node.id, 'row')}>◫</button>
+            <button style={toolbarBtnStyle} title="Split down" onClick={() => onSplit(node.id, 'column')}>⬓</button>
+            <button
+              style={{ ...toolbarBtnStyle, color: 'var(--theme-secondary)' }}
+              title="Close panel"
+              onClick={() => onClose(node.id)}
+            >
+              ×
+            </button>
+          </div>
+        </>
+      ) : (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+          }}
+        >
+          <div style={{ display: 'flex', gap: '8px', pointerEvents: 'auto' }}>
+            <button style={paneBtnStyle} onClick={() => onSetContent(node.id, 'chart')}>+ Chart</button>
+            <button style={paneBtnStyle} onClick={() => onSetContent(node.id, 'reader')}>+ Reader</button>
+          </div>
+          <div style={{ display: 'flex', gap: '8px', pointerEvents: 'auto' }}>
+            <button style={paneBtnStyle} title="Split right" onClick={() => onSplit(node.id, 'row')}>Split ◫</button>
+            <button style={paneBtnStyle} title="Split down" onClick={() => onSplit(node.id, 'column')}>Split ⬓</button>
+            {!isRoot && (
+              <button style={paneBtnStyle} onClick={() => onClose(node.id)}>Close</button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SplineTab({ isActive = true }) {
   const mountRef = useRef(null);
   const sceneRef = useRef(null);
   const rendererRef = useRef(null);
   const staircaseRef = useRef(null); // Entire staircase group rotates as one unit
   const reqIdRef = useRef(null);
+  const isActiveRef = useRef(isActive);
+  useEffect(() => { isActiveRef.current = isActive; }, [isActive]);
 
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
-  // Novel tileable interface state tracking the currently selected recursive tile (in percentage of full content area)
-  const [selectedTile, setSelectedTile] = useState({
-    left: 0,
-    top: 0,
-    width: 100,
-    height: 100
-  });
+  const [root, setRoot] = useState(createLeaf);
+  const historyRef = useRef([]);
 
-  // History state for undo functionality
-  const [tileHistory, setTileHistory] = useState([]);
+  // The 3D backdrop freezes (skips rendering) while any panel holds content —
+  // the graphic is ambience for the empty workspace, not competition for the
+  // GPU while charts are on screen.
+  const hasContentRef = useRef(false);
+  useEffect(() => { hasContentRef.current = treeHasContent(root); }, [root]);
 
-  // State to manage placed components and component selection menu
-  const [placedComponents, setPlacedComponents] = useState([]);
-  const [showComponentMenu, setShowComponentMenu] = useState(false);
+  const commit = useCallback((updater) => {
+    setRoot((prev) => {
+      const next = updater(prev);
+      if (next !== prev) historyRef.current.push(prev);
+      return next;
+    });
+  }, []);
 
-  // Keyboard navigation listener for recursive tile subdivision
+  const handleSplit = useCallback((id, dir) => {
+    commit((prev) => mapTree(prev, id, (leaf) => ({
+      type: 'split',
+      id: `split-${++paneCounter}`,
+      dir,
+      children: [leaf, createLeaf()],
+    })));
+  }, [commit]);
+
+  const handleSetContent = useCallback((id, content) => {
+    commit((prev) => mapTree(prev, id, (leaf) => ({ ...leaf, content })));
+  }, [commit]);
+
+  const handleClose = useCallback((id) => {
+    commit((prev) => {
+      if (prev.type === 'leaf' && prev.id === id) {
+        return prev.content === null ? prev : { ...prev, content: null };
+      }
+      return removeLeaf(prev, id);
+    });
+  }, [commit]);
+
+  const handleUndo = useCallback(() => {
+    const prev = historyRef.current.pop();
+    if (prev) setRoot(prev);
+  }, []);
+
+  const handleReset = useCallback(() => {
+    commit((prev) => (prev.type === 'leaf' && prev.content === null ? prev : createLeaf()));
+  }, [commit]);
+
+  // Keyboard shortcuts: Z undo, R reset
   useEffect(() => {
     if (!isActive) return;
 
     const handleKeyDown = (e) => {
-      // Ignore key presses if modifier keys are pressed or if focus is inside an input element
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
 
       const key = e.key.toLowerCase();
-      
-      if (key === 'z') {
-        setTileHistory((history) => {
-          if (history.length === 0) return history;
-          const newHistory = [...history];
-          const previousTile = newHistory.pop();
-          setSelectedTile(previousTile);
-          return newHistory;
-        });
-        return;
-      }
-
-      if (['w', 'a', 's', 'd', 'r', 'escape'].includes(key)) {
-        setSelectedTile((prev) => {
-          let nextTile = prev;
-
-          if (key === 'r' || key === 'escape') {
-            nextTile = { left: 0, top: 0, width: 100, height: 100 };
-          } else if (key === 'd') {
-            if (prev.width > 1.5) nextTile = { ...prev, left: prev.left + prev.width / 2, width: prev.width / 2 };
-          } else if (key === 'a') {
-            if (prev.width > 1.5) nextTile = { ...prev, width: prev.width / 2 };
-          } else if (key === 'w') {
-            if (prev.height > 1.5) nextTile = { ...prev, height: prev.height / 2 };
-          } else if (key === 's') {
-            if (prev.height > 1.5) nextTile = { ...prev, top: prev.top + prev.height / 2, height: prev.height / 2 };
-          }
-
-          // Push to history only if the tile actually changed
-          if (nextTile !== prev) {
-            setTileHistory(history => [...history, prev]);
-          }
-          
-          return nextTile;
-        });
-      }
+      if (key === 'z') handleUndo();
+      if (key === 'r' || key === 'escape') handleReset();
     };
 
     window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isActive]);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isActive, handleUndo, handleReset]);
 
   useEffect(() => {
     const currentMount = mountRef.current;
@@ -104,7 +271,12 @@ export default function SplineTab({ isActive = true }) {
     // 3. Renderer Setup
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(width, height);
-    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    // The transmissive glass renders the scene into an internal buffer each
+    // frame so it can refract it; at close zoom that buffer dominates GPU
+    // cost. Half resolution is visually indistinguishable here because the
+    // frosted interior (roughness 0.15) blurs the refraction anyway.
+    renderer.transmissionResolutionScale = 0.5;
     rendererRef.current = renderer;
     currentMount.appendChild(renderer.domElement);
 
@@ -158,9 +330,8 @@ export default function SplineTab({ isActive = true }) {
 
     // Dynamic Light/Dark Theme Controller ensuring precise physical contrast
     const updateThemeSettings = () => {
-      const isDark = document.documentElement.classList.contains('dark');
-      // Premium Slate-900 (#0f172a) for Dark Mode background, Cool Off-White (#f0f4f8) for Light Mode
-      scene.background = new THREE.Color(isDark ? '#0f172a' : '#f0f4f8');
+      const dark = document.documentElement.classList.contains('dark');
+      scene.background = new THREE.Color(dark ? '#0C1122' : '#F7FBF8');
     };
     updateThemeSettings();
 
@@ -224,12 +395,19 @@ export default function SplineTab({ isActive = true }) {
     cyanRectLight.lookAt(0, 0, 0);
     scene.add(cyanRectLight);
 
-    // 7. Animation Loop
+    // 7. Animation Loop — uncapped; renders every display frame while visible.
     let isDragging = false;
     let previousMousePosition = { x: 0, y: 0 };
 
     const animate = () => {
       reqIdRef.current = requestAnimationFrame(animate);
+
+      // Skip all work while this tab is hidden.
+      if (!isActiveRef.current) return;
+
+      // Freeze while panels hold content (last rendered frame stays on the
+      // canvas). Dragging the backdrop still renders so it feels alive.
+      if (hasContentRef.current && !isDragging) return;
 
       // Rotate the entire staircase as one rigid body
       if (staircaseRef.current && !isDragging) {
@@ -283,6 +461,10 @@ export default function SplineTab({ isActive = true }) {
 
       // Clamp camera distance smoothly so objects remain perfectly visible and don't clip the near/far planes
       camera.position.z = Math.max(2.5, Math.min(12.0, camera.position.z));
+
+      // Render immediately — the loop may be frozen (panels placed) or capped
+      // at 30fps, and zoom must track the wheel without stutter.
+      renderer.render(scene, camera);
     };
 
     const domElement = renderer.domElement;
@@ -300,6 +482,8 @@ export default function SplineTab({ isActive = true }) {
       camera.aspect = newWidth / newHeight;
       camera.updateProjectionMatrix();
       rendererRef.current.setSize(newWidth, newHeight);
+      // Resizing clears the canvas; redraw once even when the loop is frozen.
+      renderer.render(scene, camera);
     };
 
     const resizeObserver = new ResizeObserver(() => {
@@ -332,179 +516,82 @@ export default function SplineTab({ isActive = true }) {
     };
   }, []);
 
+  const canUndo = historyRef.current.length > 0;
+  const workspaceEmpty = root.type === 'leaf' && root.content === null;
+
   return (
     <div
-      className="flex flex-col md:flex-row items-center justify-center h-full w-full overflow-hidden relative select-none"
+      className="h-full w-full overflow-hidden relative select-none"
       style={{ backgroundColor: 'var(--bg-main)' }}
     >
       {/* Three.js canvas mount point */}
-      <div ref={mountRef} className="w-full h-full cursor-grab active:cursor-grabbing flex items-center justify-center" />
+      <div ref={mountRef} className="absolute inset-0 cursor-grab active:cursor-grabbing" />
 
-      {/* Novel Tileable Interface Overlay sitting on top of the visuals */}
-      <div className="absolute inset-0 pointer-events-none z-10 overflow-hidden">
-        {/* Selection Border enveloping the currently selected tile area */}
-        <div
-          className="absolute border-[3px] border-dotted transition-all duration-300 ease-in-out box-border rounded-sm"
+      {/* Split-pane workspace overlay */}
+      <div
+        className="absolute inset-0 z-10"
+        style={{ padding: '10px', pointerEvents: 'none' }}
+      >
+        <PaneView
+          node={root}
+          depth={0}
+          isActive={isActive}
+          onSplit={handleSplit}
+          onSetContent={handleSetContent}
+          onClose={handleClose}
+          isRoot
+        />
+      </div>
+
+      {/* Workspace controls */}
+      <div
+        className="absolute z-20"
+        style={{
+          bottom: '18px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '8px 12px',
+          borderRadius: '999px',
+          border: '1px solid var(--border-main)',
+          background: isDark ? 'rgba(20, 27, 54, 0.9)' : 'rgba(255, 255, 255, 0.9)',
+          boxShadow: 'var(--shadow-soft)',
+          backdropFilter: 'blur(8px)',
+        }}
+      >
+        <span
           style={{
-            left: `${selectedTile.left}%`,
-            top: `${selectedTile.top}%`,
-            width: `${selectedTile.width}%`,
-            height: `${selectedTile.height}%`,
-            borderColor: isDark ? '#ffffff' : '#000000',
-            backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.03)',
-            boxShadow: isDark
-              ? '0 0 20px rgba(255, 255, 255, 0.15), inset 0 0 20px rgba(255, 255, 255, 0.15)'
-              : '0 0 20px rgba(0, 0, 0, 0.1), inset 0 0 20px rgba(0, 0, 0, 0.05)'
+            fontSize: '11px',
+            fontWeight: 600,
+            fontFamily: 'var(--font-display)',
+            color: 'var(--text-muted)',
+            paddingRight: '4px',
+            borderRight: '1px solid var(--border-main)',
           }}
         >
-          {/* Placeholder reminder for future content component placement as specified by user */}
-          <div 
-            className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity duration-300 bg-black/40 backdrop-blur-sm pointer-events-auto cursor-pointer p-1 overflow-hidden"
-            onClick={() => setShowComponentMenu(true)}
-          >
-            {showComponentMenu ? (
-              <div className="flex flex-col gap-2 items-center">
-                <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setPlacedComponents([...placedComponents, { ...selectedTile, type: 'chart', id: Date.now() }]);
-                    setShowComponentMenu(false);
-                  }}
-                  className="bg-emerald-600/80 hover:bg-emerald-500 text-white text-xs px-4 py-2 rounded shadow-lg transition-colors cursor-pointer"
-                >
-                  Place Interactive Chart
-                </button>
-                <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setPlacedComponents([...placedComponents, { ...selectedTile, type: 'reader', id: Date.now() }]);
-                    setShowComponentMenu(false);
-                  }}
-                  className="bg-blue-600/80 hover:bg-blue-500 text-white text-xs px-4 py-2 rounded shadow-lg transition-colors cursor-pointer"
-                >
-                  Place Reader
-                </button>
-                <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowComponentMenu(false);
-                  }}
-                  className="bg-gray-600/80 hover:bg-gray-500 text-white text-xs px-4 py-2 rounded shadow-lg transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
-              </div>
-            ) : (
-              <div className="text-white/90 text-[10px] sm:text-xs font-mono border border-white/20 px-1 sm:px-3 py-0.5 sm:py-1.5 rounded bg-white/5 max-w-full truncate text-center">
-                + Place Component Here
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Render Placed Components */}
-        {placedComponents.map((comp) => (
-          <div 
-            key={comp.id} 
-            className="absolute pointer-events-auto z-20 border border-white/10 shadow-2xl"
-            style={{
-              left: `${comp.left}%`,
-              top: `${comp.top}%`,
-              width: `${comp.width}%`,
-              height: `${comp.height}%`,
-              backgroundColor: 'var(--bg-main)'
-            }}
-          >
-            <button
-              className="absolute top-2 right-2 z-50 bg-red-500/80 hover:bg-red-500 text-white w-6 h-6 rounded-full flex items-center justify-center cursor-pointer shadow-lg text-sm transition-colors"
-              onClick={() => setPlacedComponents(placedComponents.filter(c => c.id !== comp.id))}
-              title="Remove Component"
-            >
-              &times;
-            </button>
-            {comp.type === 'chart' && <TvInteractiveChart isActive={isActive} isCompact={comp.width < 100 || comp.height < 100} />}
-            {comp.type === 'reader' && <div style={{ width: '100%', height: '100%', overflow: 'auto' }}><Reader /></div>}
-          </div>
-        ))}
-
-        {/* Helpful User Instructions Drawer/Panel */}
-        <div className="absolute bottom-6 right-6 pointer-events-auto" style={{ bottom: '24px', right: '24px' }}>
-          <div
-            className="bg-slate-900/95 backdrop-blur-xl border border-white/20 shadow-2xl text-white/90"
-            style={{
-              boxSizing: 'border-box',
-              width: '280px',
-              padding: '16px',
-              borderRadius: '12px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '12px'
-            }}
-          >
-            {/* Header section with Title and Reset */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '10px', fontWeight: 'bold', letterSpacing: '0.1em', color: '#34d399', fontFamily: 'monospace' }}>
-                SUBDIVISION CONTROLS
-              </span>
-              <button
-                onClick={() => setSelectedTile({ left: 0, top: 0, width: 100, height: 100 })}
-                className="bg-white/10 hover:bg-white/20 transition-colors cursor-pointer"
-                style={{
-                  fontSize: '9px',
-                  padding: '3px 8px',
-                  borderRadius: '4px',
-                  border: '1px solid rgba(255,255,255,0.15)',
-                  color: '#ffffff',
-                  fontFamily: 'monospace',
-                  background: 'rgba(255,255,255,0.08)'
-                }}
-              >
-                Reset (R)
-              </button>
-            </div>
-
-            {/* Shortcuts Grid */}
-            <div
-              className="bg-black/40 border border-white/10"
-              style={{
-                boxSizing: 'border-box',
-                padding: '12px',
-                borderRadius: '8px',
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                gap: '10px',
-                background: 'rgba(0,0,0,0.35)',
-                border: '1px solid rgba(255,255,255,0.1)'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <kbd style={{ width: '22px', height: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', fontSize: '9px', fontWeight: 'bold', fontFamily: 'monospace' }}>W</kbd>
-                <span style={{ fontSize: '9px', fontFamily: 'monospace', opacity: 0.8 }}>Top Half</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <kbd style={{ width: '22px', height: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', fontSize: '9px', fontWeight: 'bold', fontFamily: 'monospace' }}>S</kbd>
-                <span style={{ fontSize: '9px', fontFamily: 'monospace', opacity: 0.8 }}>Bottom Half</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <kbd style={{ width: '22px', height: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', fontSize: '9px', fontWeight: 'bold', fontFamily: 'monospace' }}>A</kbd>
-                <span style={{ fontSize: '9px', fontFamily: 'monospace', opacity: 0.8 }}>Left Half</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <kbd style={{ width: '22px', height: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', fontSize: '9px', fontWeight: 'bold', fontFamily: 'monospace' }}>D</kbd>
-                <span style={{ fontSize: '9px', fontFamily: 'monospace', opacity: 0.8 }}>Right Half</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <kbd style={{ width: '22px', height: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', fontSize: '9px', fontWeight: 'bold', fontFamily: 'monospace' }}>Z</kbd>
-                <span style={{ fontSize: '9px', fontFamily: 'monospace', opacity: 0.8 }}>Undo</span>
-              </div>
-            </div>
-
-            {/* Footer Text */}
-            <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)', fontFamily: 'monospace', fontStyle: 'italic', textAlign: 'center', marginTop: '0px' }}>
-              Recursive subdivisions. Placement ready.
-            </div>
-          </div>
-        </div>
+          Workspace
+        </span>
+        <button
+          style={{ ...paneBtnStyle, boxShadow: 'none', opacity: canUndo ? 1 : 0.45 }}
+          onClick={handleUndo}
+          disabled={!canUndo}
+          title="Undo last layout change (Z)"
+        >
+          Undo
+        </button>
+        <button
+          style={{ ...paneBtnStyle, boxShadow: 'none', opacity: workspaceEmpty ? 0.45 : 1 }}
+          onClick={handleReset}
+          disabled={workspaceEmpty}
+          title="Clear all panels (R)"
+        >
+          Clear all
+        </button>
+        <span style={{ fontSize: '10px', color: 'var(--text-muted)', paddingLeft: '4px' }}>
+          Z undo · R clear
+        </span>
       </div>
     </div>
   );

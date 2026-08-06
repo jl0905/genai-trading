@@ -88,6 +88,9 @@ export default function TvInteractiveChart({ isActive = true, isCompact = false 
   const [suggestions, setSuggestions] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [showEducation, setShowEducation] = useState(false);
+  // Ref mirror so the chart's subscribeClick closure (created once) sees the current value
+  const showEducationRef = useRef(false);
+  showEducationRef.current = showEducation;
   const [selectedEducationTopic, setSelectedEducationTopic] = useState('stockChart');
   const [educationPanelPosition, setEducationPanelPosition] = useState({ x: 24, y: 260 });
   const [visibleIndicators, setVisibleIndicators] = useState({
@@ -225,12 +228,12 @@ export default function TvInteractiveChart({ isActive = true, isCompact = false 
   useEffect(() => { symbolRef.current = symbol; }, [symbol]);
 
   // Chart theme variables
-  const chartBg = isDark ? '#000000' : '#ffffff';
-  const chartText = isDark ? '#d1d5db' : '#4b5563';
-  const chartGrid = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)';
-  const crosshairLine = isDark ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.3)';
-  const labelBg = isDark ? '#1a1a2e' : '#e5e7eb';
-  const chartBorder = isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)';
+  const chartBg = isDark ? '#0C1122' : '#ffffff';
+  const chartText = isDark ? '#8B93BE' : '#66709A';
+  const chartGrid = isDark ? 'rgba(233, 237, 251, 0.06)' : 'rgba(30, 39, 73, 0.06)';
+  const crosshairLine = isDark ? 'rgba(129, 207, 255, 0.4)' : 'rgba(74, 105, 206, 0.35)';
+  const labelBg = isDark ? '#1B2445' : '#EAF4EE';
+  const chartBorder = isDark ? 'rgba(38, 47, 88, 0.9)' : 'rgba(216, 228, 223, 0.9)';
   const themePrimary = getComputedStyle(document.documentElement).getPropertyValue('--theme-primary').trim() || '#8BA97F';
   const themePrimaryRgb = getComputedStyle(document.documentElement).getPropertyValue('--theme-primary-rgb').trim() || '139, 169, 127';
   const themeSecondary = getComputedStyle(document.documentElement).getPropertyValue('--theme-secondary').trim() || '#FF5A5A';
@@ -259,11 +262,6 @@ export default function TvInteractiveChart({ isActive = true, isCompact = false 
     if (!showEducation) return;
     setSelectedEducationTopic(topic);
   };
-
-  const openEducationTopic = useCallback((topic) => {
-    setShowEducation(true);
-    setSelectedEducationTopic(topic);
-  }, []);
 
   const toggleIndicator = (indicator) => {
     setVisibleIndicators((current) => ({
@@ -699,18 +697,20 @@ export default function TvInteractiveChart({ isActive = true, isCompact = false 
       });
 
       chartRef.current.subscribeClick((param) => {
+        // Chart clicks only switch topics while educate mode is on — they never turn it on
+        if (!showEducationRef.current) return;
         if (!param?.point) return;
 
         const chartHeight = chartContainerRef.current?.clientHeight || 0;
         if (chartHeight > 0 && param.point.y > chartHeight * 0.76) {
-          openEducationTopic('volume');
+          setSelectedEducationTopic('volume');
           return;
         }
 
         const candle = param.seriesData?.get(candleSeriesRef.current);
         if (!candle) return;
 
-        openEducationTopic(candle.close >= candle.open ? 'greenCandle' : 'redCandle');
+        setSelectedEducationTopic(candle.close >= candle.open ? 'greenCandle' : 'redCandle');
       });
     }
 
@@ -1242,81 +1242,6 @@ export default function TvInteractiveChart({ isActive = true, isCompact = false 
             }}
           >{loading ? 'Loading...' : 'Refresh'}</button>
 
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '0 4px',
-            ...getEducationHighlightStyle(
-              selectedEducationTopic.startsWith('sma') || selectedEducationTopic.startsWith('ema') || selectedEducationTopic === 'vrvp'
-                ? selectedEducationTopic
-                : 'sma20'
-            ),
-          }}>
-            {isCompact ? (
-              <select
-                onChange={(e) => {
-                  if (e.target.value) toggleIndicator(e.target.value);
-                  e.target.value = "";
-                }}
-                style={{
-                  backgroundColor: 'var(--bg-main)',
-                  color: 'var(--text-main)',
-                  border: '2px solid var(--border-focus)',
-                  padding: '6px 10px',
-                  fontFamily: 'var(--font-main)',
-                  fontSize: '12px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  textTransform: 'uppercase',
-                  outline: 'none',
-                }}
-              >
-                <option value="">Indicators</option>
-                {[
-                  { id: 'sma20', label: 'SMA 20' },
-                  { id: 'sma200', label: 'SMA 200' },
-                  { id: 'ema9', label: 'EMA 9' },
-                  { id: 'bbands', label: 'BB' },
-                  { id: 'vrvp', label: 'VRVP' },
-                ].map(ind => (
-                  <option key={ind.id} value={ind.id}>
-                    {visibleIndicators[ind.id] ? '✓ ' : ''}{ind.label}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              [
-                { id: 'sma20', label: 'SMA 20', color: '#f59e0b' },
-                { id: 'sma200', label: 'SMA 200', color: '#3b82f6' },
-                { id: 'ema9', label: 'EMA 9', color: '#a855f7' },
-                { id: 'bbands', label: 'BB', color: '#f59e0b' },
-                { id: 'vrvp', label: 'VRVP', color: 'var(--theme-primary)' },
-              ].map((indicator) => (
-                <button
-                  key={indicator.id}
-                  type="button"
-                  onClick={() => toggleIndicator(indicator.id)}
-                  aria-pressed={visibleIndicators[indicator.id]}
-                  style={{
-                    backgroundColor: visibleIndicators[indicator.id] ? indicator.color : 'var(--bg-main)',
-                    color: visibleIndicators[indicator.id] ? '#ffffff' : 'var(--text-main)',
-                    border: `2px solid ${visibleIndicators[indicator.id] ? indicator.color : 'var(--border-focus)'}`,
-                    padding: '6px 10px',
-                    fontFamily: 'var(--font-main)',
-                    fontSize: '12px',
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
-                    textTransform: 'uppercase',
-                  }}
-                  title={`${visibleIndicators[indicator.id] ? 'Hide' : 'Show'} ${indicator.label}`}
-                >
-                  {indicator.label}
-                </button>
-              ))
-            )}
-          </div>
-
           {!isCompact && (
             <button
               type="button"
@@ -1489,6 +1414,90 @@ export default function TvInteractiveChart({ isActive = true, isCompact = false 
               inset: 0,
             }}
           />
+          {/* Indicator toggles — embedded in the chart's top-left corner */}
+          <div style={{
+            position: 'absolute',
+            top: '8px',
+            left: '8px',
+            zIndex: 20,
+            display: 'flex',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '4px',
+            maxWidth: 'calc(100% - 110px)',
+            ...getEducationHighlightStyle(
+              selectedEducationTopic.startsWith('sma') || selectedEducationTopic.startsWith('ema') || selectedEducationTopic === 'vrvp'
+                ? selectedEducationTopic
+                : 'sma20'
+            ),
+          }}>
+            {isCompact ? (
+              <select
+                onChange={(e) => {
+                  if (e.target.value) toggleIndicator(e.target.value);
+                  e.target.value = "";
+                }}
+                style={{
+                  backgroundColor: 'var(--bg-main)',
+                  color: 'var(--text-main)',
+                  border: '1px solid var(--border-focus)',
+                  borderRadius: '4px',
+                  padding: '4px 8px',
+                  fontFamily: 'var(--font-main)',
+                  fontSize: '11px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  textTransform: 'uppercase',
+                  outline: 'none',
+                  opacity: 0.9,
+                }}
+              >
+                <option value="">Indicators</option>
+                {[
+                  { id: 'sma20', label: 'SMA 20' },
+                  { id: 'sma200', label: 'SMA 200' },
+                  { id: 'ema9', label: 'EMA 9' },
+                  { id: 'bbands', label: 'BB' },
+                  { id: 'vrvp', label: 'VRVP' },
+                ].map(ind => (
+                  <option key={ind.id} value={ind.id}>
+                    {visibleIndicators[ind.id] ? '✓ ' : ''}{ind.label}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              [
+                { id: 'sma20', label: 'SMA 20', color: '#f59e0b' },
+                { id: 'sma200', label: 'SMA 200', color: '#3b82f6' },
+                { id: 'ema9', label: 'EMA 9', color: '#a855f7' },
+                { id: 'bbands', label: 'BB', color: '#f59e0b' },
+                { id: 'vrvp', label: 'VRVP', color: 'var(--theme-primary)' },
+              ].map((indicator) => (
+                <button
+                  key={indicator.id}
+                  type="button"
+                  onClick={() => toggleIndicator(indicator.id)}
+                  aria-pressed={visibleIndicators[indicator.id]}
+                  style={{
+                    backgroundColor: visibleIndicators[indicator.id] ? indicator.color : 'rgba(var(--accent-rgb), 0.06)',
+                    color: visibleIndicators[indicator.id] ? '#ffffff' : 'var(--text-muted)',
+                    border: `1px solid ${visibleIndicators[indicator.id] ? indicator.color : 'var(--border-main)'}`,
+                    borderRadius: '4px',
+                    padding: '3px 8px',
+                    fontFamily: 'var(--font-main)',
+                    fontSize: '11px',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    textTransform: 'uppercase',
+                    backdropFilter: 'blur(3px)',
+                  }}
+                  title={`${visibleIndicators[indicator.id] ? 'Hide' : 'Show'} ${indicator.label}`}
+                >
+                  {indicator.label}
+                </button>
+              ))
+            )}
+          </div>
           {priceGaugeMarkers && (
             <>
               <div style={{
@@ -1557,14 +1566,14 @@ export default function TvInteractiveChart({ isActive = true, isCompact = false 
                 borderRadius: '3px',
                 cursor: 'pointer',
               }}
-                onClick={() => openEducationTopic('vrvp')}
+                onClick={() => selectEducationTopic('vrvp')}
               >
                 VRVP{volumeProfileSource ? ` (${volumeProfileSource.replace('alpaca_', '').replaceAll('_', ' ')})` : ''}
               </div>
               {volumeProfileBars.map((bar, index) => (
                 <div
                   key={`${bar.price}-${index}`}
-                  onClick={() => openEducationTopic('vrvp')}
+                  onClick={() => selectEducationTopic('vrvp')}
                   title={`${volumeProfileSource.startsWith('alpaca') ? 'Alpaca' : 'Approx'} volume near $${bar.price.toFixed(2)}: ${formatVolume(bar.volume)}`}
                   style={{
                     position: 'absolute',

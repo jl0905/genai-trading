@@ -4,14 +4,19 @@ import { useState, useEffect, useRef } from 'react';
 const CHAR_WIDTH_PX = 7.2;
 const CHAR_HEIGHT_PX = 12;
 
-export default function EntryVisual() {
-	const [donut, setDonut] = useState('');
-	const [isDragging, setIsDragging] = useState(false);
-	const [rotation, setRotation] = useState({ x: 0, y: 0 });
-	const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-	const [autoRotation, setAutoRotation] = useState({ x: 0, y: 0 });
+// Target frame interval — the ASCII render doesn't benefit from 60fps.
+const FRAME_MS = 40;
+
+export default function EntryVisual({ isActive = true }) {
 	const [gridDims, setGridDims] = useState({ width: 100, height: 50 });
 	const containerRef = useRef(null);
+	const preRef = useRef(null);
+
+	// Animation state lives in refs so per-frame updates never touch React —
+	// the frame text is written straight to the <pre> node.
+	const rotationRef = useRef({ x: 0, y: 0 });
+	const draggingRef = useRef(false);
+	const dragStartRef = useRef({ x: 0, y: 0 });
 
 	// --- Measure container so the character grid fills the page (no clipping) ---
 	useEffect(() => {
@@ -32,60 +37,33 @@ export default function EntryVisual() {
 		return () => observer.disconnect();
 	}, []);
 
-	useEffect(() => {
-		const interval = setInterval(() => {
-			if (!isDragging) {
-				setAutoRotation(prev => ({
-					x: prev.x + 0.021, // Vertical rotation
-					y: prev.y + 0.03  // Horizontal rotation
-				}));
-			}
-		}, 50);
-
-		return () => clearInterval(interval);
-	}, [isDragging]);
-
 	const handleMouseDown = (e) => {
-		setIsDragging(true);
-		setDragStart({ x: e.clientX, y: e.clientY });
-		// Start from current auto-rotation position
-		setRotation({ x: autoRotation.x, y: autoRotation.y });
+		draggingRef.current = true;
+		dragStartRef.current = { x: e.clientX, y: e.clientY };
 	};
 
 	const handleMouseMove = (e) => {
-		if (!isDragging) return;
+		if (!draggingRef.current) return;
 
-		const deltaX = (e.clientX - dragStart.x) * 0.01;
-		const deltaY = (e.clientY - dragStart.y) * 0.01;
-
-		setRotation(prev => ({
-			x: prev.x + deltaY,
-			y: prev.y + deltaX
-		}));
-
-		setDragStart({ x: e.clientX, y: e.clientY });
+		rotationRef.current = {
+			x: rotationRef.current.x + (e.clientY - dragStartRef.current.y) * 0.01,
+			y: rotationRef.current.y + (e.clientX - dragStartRef.current.x) * 0.01,
+		};
+		dragStartRef.current = { x: e.clientX, y: e.clientY };
 	};
 
 	const handleMouseUp = () => {
-		if (isDragging) {
-			// Transfer manual rotation to auto-rotation
-			setAutoRotation(rotation);
-		}
-		setIsDragging(false);
+		draggingRef.current = false;
 	};
 
 	useEffect(() => {
-		const { width, height } = gridDims;
-		// Use manual rotation when dragging, auto-rotation when not
-		const currentRotation = isDragging ? rotation : autoRotation;
-		const horizontalAngle = currentRotation.y;
-		const verticalAngle = currentRotation.x;
-		const verticalTilt = Math.sin(autoRotation.y * 0.3) * 0.15; // Use auto-rotation for subtle tilt
+		// Fully pause while this tab is hidden — no rAF, no trig, no DOM writes.
+		if (!isActive) return;
 
-		let output = [];
+		const { width, height } = gridDims;
 		const gridSize = width * height;
-		const z = new Array(gridSize).fill(0);
-		const b = new Array(gridSize).fill(' ');
+		const z = new Array(gridSize);
+		const b = new Array(gridSize);
 
 		// Shared lighting constants
 		const worldLightX = 1;
@@ -96,69 +74,96 @@ export default function EntryVisual() {
 		const normalizedLightY = worldLightY / lightMagnitude;
 		const normalizedLightZ = worldLightZ / lightMagnitude;
 
-		// Helper: project a 3D point through the shared rotation + perspective pipeline
-		// NOTE: Projection multipliers (40, 25) are kept identical to the original —
-		// the shape stays the same size. Only the grid boundary expanded.
-		const projectPoint = (x1, y1, zOriginal, fixedChar) => {
-			// Calculate lighting on unrotated object (fixed light source)
-			const normalUnrotated = Math.sqrt(x1 * x1 + y1 * y1 + zOriginal * zOriginal);
-			const dotProduct = (x1 * normalizedLightX + y1 * normalizedLightY + zOriginal * normalizedLightZ) / normalUnrotated;
-			const brightness = Math.min(8, Math.floor(11 * Math.max(0, dotProduct)));
+		const renderFrame = () => {
+			const horizontalAngle = rotationRef.current.y;
+			const verticalAngle = rotationRef.current.x;
+			const verticalTilt = Math.sin(rotationRef.current.y * 0.3) * 0.15;
 
-			// Multi-axis rotation for full 3D viewing
-			// Rotate around Y axis (horizontal)
-			const x2 = x1 * Math.cos(horizontalAngle) - zOriginal * Math.sin(horizontalAngle);
-			const zRotated = x1 * Math.sin(horizontalAngle) + zOriginal * Math.cos(horizontalAngle);
+			z.fill(0);
+			b.fill(' ');
 
-			// Rotate around X axis (vertical)
-			const y2 = y1 * Math.cos(verticalAngle) - zRotated * Math.sin(verticalAngle);
-			const z3 = y1 * Math.sin(verticalAngle) + zRotated * Math.cos(verticalAngle);
+			// Helper: project a 3D point through the shared rotation + perspective pipeline
+			// NOTE: Projection multipliers (40, 25) are kept identical to the original —
+			// the shape stays the same size. Only the grid boundary expanded.
+			const projectPoint = (x1, y1, zOriginal, fixedChar) => {
+				// Calculate lighting on unrotated object (fixed light source)
+				const normalUnrotated = Math.sqrt(x1 * x1 + y1 * y1 + zOriginal * zOriginal);
+				const dotProduct = (x1 * normalizedLightX + y1 * normalizedLightY + zOriginal * normalizedLightZ) / normalUnrotated;
+				const brightness = Math.min(8, Math.floor(11 * Math.max(0, dotProduct)));
 
-			// Additional slight tilt for dynamic perspective
-			const y3 = y2 * Math.cos(verticalTilt) - z3 * Math.sin(verticalTilt);
-			const z4 = y2 * Math.sin(verticalTilt) + z3 * Math.cos(verticalTilt);
+				// Multi-axis rotation for full 3D viewing
+				// Rotate around Y axis (horizontal)
+				const x2 = x1 * Math.cos(horizontalAngle) - zOriginal * Math.sin(horizontalAngle);
+				const zRotated = x1 * Math.sin(horizontalAngle) + zOriginal * Math.cos(horizontalAngle);
 
-			// Perspective projection - viewer at fixed distance
-			const D = 1 / (z4 + 3.1);
-			const screenX = Math.floor(width / 2 + 40 * D * x2);
-			const screenY = Math.floor(height / 2 + 25 * D * y3);
-			const o = screenX + width * screenY;
+				// Rotate around X axis (vertical)
+				const y2 = y1 * Math.cos(verticalAngle) - zRotated * Math.sin(verticalAngle);
+				const z3 = y1 * Math.sin(verticalAngle) + zRotated * Math.cos(verticalAngle);
 
-			if (screenY > 0 && screenY < height && screenX > 0 && screenX < width && D > z[o]) {
-				z[o] = D;
-				b[o] = fixedChar || '.:-=*+5#@'[brightness > 0 ? brightness : 0];
+				// Additional slight tilt for dynamic perspective
+				const y3 = y2 * Math.cos(verticalTilt) - z3 * Math.sin(verticalTilt);
+				const z4 = y2 * Math.sin(verticalTilt) + z3 * Math.cos(verticalTilt);
+
+				// Perspective projection - viewer at fixed distance
+				const D = 1 / (z4 + 3.1);
+				const screenX = Math.floor(width / 2 + 40 * D * x2);
+				const screenY = Math.floor(height / 2 + 25 * D * y3);
+				const o = screenX + width * screenY;
+
+				if (screenY > 0 && screenY < height && screenX > 0 && screenX < width && D > z[o]) {
+					z[o] = D;
+					b[o] = fixedChar || '.:-=*+5#@'[brightness > 0 ? brightness : 0];
+				}
+			};
+
+			// --- Pass 1: Sphere ---
+			// 0.02 still oversamples every screen cell (~314 samples per ring vs ~100
+			// columns) — visually identical to 0.01 at half the per-frame trig cost.
+			const sphereRadius = 1.5;
+			for (let j = 0; j < 6.28; j += 0.03) {
+				for (let i = 0; i < 6.28; i += 0.02) {
+					const x1 = sphereRadius * Math.sin(j) * Math.cos(i);
+					const y1 = sphereRadius * Math.sin(j) * Math.sin(i);
+					const zOriginal = sphereRadius * Math.cos(j);
+					projectPoint(x1, y1, zOriginal);
+				}
 			}
+
+			// --- Pass 2: Ring (flat annulus in the XZ plane, y=0) ---
+			const ringInner = 1.8;
+			const ringOuter = 2.0;
+			for (let theta = 0; theta < 6.28; theta += 0.01) {
+				for (let r = ringInner; r <= ringOuter; r += 0.04) {
+					projectPoint(r * Math.cos(theta), 0, r * Math.sin(theta), '-');
+				}
+			}
+
+			const output = [];
+			for (let k = 0; k < gridSize; k++) {
+				output.push(k % width === 0 ? '\n' : b[k]);
+			}
+			if (preRef.current) preRef.current.textContent = output.join('');
 		};
 
-		// --- Pass 1: Sphere ---
-		const sphereRadius = 1.5;
-		for (let j = 0; j < 6.28; j += 0.03) {
-			for (let i = 0; i < 6.28; i += 0.01) {
-				const x1 = sphereRadius * Math.sin(j) * Math.cos(i);
-				const y1 = sphereRadius * Math.sin(j) * Math.sin(i);
-				const zOriginal = sphereRadius * Math.cos(j);
-				projectPoint(x1, y1, zOriginal);
+		let reqId;
+		let lastFrame = 0;
+		const loop = (now) => {
+			reqId = requestAnimationFrame(loop);
+			if (now - lastFrame < FRAME_MS) return;
+			lastFrame = now;
+
+			if (!draggingRef.current) {
+				rotationRef.current = {
+					x: rotationRef.current.x + 0.021, // Vertical rotation
+					y: rotationRef.current.y + 0.03,  // Horizontal rotation
+				};
 			}
-		}
+			renderFrame();
+		};
+		reqId = requestAnimationFrame(loop);
 
-		// --- Pass 2: Ring (flat annulus in the XZ plane, y=0) ---
-		const ringInner = 1.8;
-		const ringOuter = 2.0;
-		for (let theta = 0; theta < 6.28; theta += 0.01) {
-			for (let r = ringInner; r <= ringOuter; r += 0.04) {
-				const x1 = r * Math.cos(theta);
-				const y1 = 0;
-				const zOriginal = r * Math.sin(theta);
-				projectPoint(x1, y1, zOriginal, '-');
-			}
-		}
-
-		for (let k = 0; k < gridSize; k++) {
-			output.push(k % width === 0 ? '\n' : b[k]);
-		}
-
-		setDonut(output.join(''));
-	}, [autoRotation, isDragging, rotation, gridDims]);
+		return () => cancelAnimationFrame(reqId);
+	}, [isActive, gridDims]);
 
 	return (
 		<div
@@ -170,9 +175,7 @@ export default function EntryVisual() {
 			onMouseUp={handleMouseUp}
 			onMouseLeave={handleMouseUp}
 		>
-			<pre className="text-xs leading-none font-mono whitespace-pre" style={{ color: 'var(--accent)' }}>
-				{donut}
-			</pre>
+			<pre ref={preRef} className="text-xs leading-none font-mono whitespace-pre" style={{ color: 'var(--accent)' }} />
 		</div>
-	)
+	);
 }

@@ -1,5 +1,6 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import './App.css'
+import CommandPalette from './CommandPalette.jsx'
 import EntryVisual from './content/EntryVisual.jsx'
 import Reader from './content/Reader.jsx'
 import TvInteractiveChart from './content/tvInteractiveChart.jsx'
@@ -33,6 +34,8 @@ function App() {
   const [tabsList, setTabsList] = useState(initialTabs)
   const [draggedTabId, setDraggedTabId] = useState(null)
   const { theme, toggleTheme } = useTheme()
+
+  const [paletteOpen, setPaletteOpen] = useState(false)
 
   const [user, setUser] = useState(null)
   const [showLogin, setShowLogin] = useState(false)
@@ -107,6 +110,41 @@ function App() {
     return () => window.removeEventListener('open-reader-section', handleOpenReaderSection)
   }, [])
 
+  // Global shortcut: Ctrl/Cmd+K or Ctrl/Cmd+Shift+P opens the command palette
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      const mod = e.ctrlKey || e.metaKey
+      if (mod && (e.key === 'k' || e.key === 'K' || ((e.key === 'p' || e.key === 'P') && e.shiftKey))) {
+        e.preventDefault()
+        setPaletteOpen(prev => !prev)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
+  const paletteCommands = useMemo(() => [
+    ...tabsList.map(tab => ({
+      id: `goto-${tab.id}`,
+      category: 'Go to',
+      label: tab.name,
+      hint: activeTab === tab.id ? 'current' : undefined,
+      action: () => setActiveTab(tab.id),
+    })),
+    {
+      id: 'toggle-theme',
+      category: 'View',
+      label: `Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`,
+      action: toggleTheme,
+    },
+    {
+      id: 'toggle-header-pin',
+      category: 'View',
+      label: headerPinned ? 'Unpin header' : 'Pin header',
+      action: () => setHeaderPinned(prev => !prev),
+    },
+  ], [tabsList, activeTab, theme, toggleTheme, headerPinned])
+
   const handleLogin = (e) => {
     e.preventDefault()
     setLoginError('')
@@ -162,6 +200,12 @@ function App() {
 
   return (
     <div className="app">
+      {paletteOpen && (
+        <CommandPalette
+          onClose={() => setPaletteOpen(false)}
+          commands={paletteCommands}
+        />
+      )}
       {/* Invisible hover zone at the very top — triggers header reveal when unpinned */}
       {!headerPinned && (
         <div
@@ -216,6 +260,31 @@ function App() {
                   {theme === 'dark' ? '−' : '+'}
                 </span>
               </span>
+            </button>
+
+            {/* Command palette trigger */}
+            <button
+              onClick={() => setPaletteOpen(true)}
+              title="Command palette (Ctrl+K)"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: 'var(--bg-panel)',
+                border: '1px solid var(--border-main)',
+                borderRadius: '6px',
+                padding: '3px 8px',
+                cursor: 'pointer',
+                color: 'var(--text-muted)',
+                fontSize: '12px',
+                fontFamily: 'var(--font-main)',
+              }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <span>Ctrl K</span>
             </button>
 
             {/* Pin / Unpin header toggle */}

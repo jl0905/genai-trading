@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+/*
+  Theme: "Soft Ledger" — derived from theme1.jpg
+  Honeydew #E5F8F0 · Tea Green #ECFFBE · Mauve #BCA4F5 · Sky Blue #81CFFF · Royal Blue #4A69CE
+  Chart semantics (up/down green/red) are preserved untouched.
+*/
+
 :root {
   --theme-primary: #8BA97F;
   --theme-primary-rgb: 139, 169, 127;
@@ -7,38 +13,62 @@
   --theme-secondary-rgb: 255, 90, 90;
 
   --font-main: 'IBM Plex Sans', sans-serif;
-  /* --font-main: 'Viga', sans-serif; */
-  /* --font-main: 'Courier New', Courier, monospace; */
+  --font-display: 'Sora', 'IBM Plex Sans', sans-serif;
 
-  --bg-main: #ffffff;
-  --bg-panel: #f3f4f6;
+  /* Palette anchors from theme1.jpg */
+  --honeydew: #E5F8F0;
+  --tea-green: #ECFFBE;
+  --mauve: #BCA4F5;
+  --sky-blue: #81CFFF;
+  --royal-blue: #4A69CE;
+
+  --bg-main: #F7FBF8;
+  --bg-panel: #EAF4EE;
   --bg-input: #ffffff;
-  --text-main: #000000;
-  --text-muted: #6b7280;
-  --border-main: #d1d5db;
-  --border-focus: #000000;
-  --accent: var(--theme-primary);
+  --text-main: #1E2749;
+  --text-muted: #66709A;
+  --border-main: #D8E4DF;
+  --border-focus: #4A69CE;
+  --accent: #4A69CE;
+  --accent-rgb: 74, 105, 206;
+  --accent-soft: rgba(74, 105, 206, 0.10);
+  --accent-2: #BCA4F5;
+  --accent-3: #81CFFF;
+  --highlight: #ECFFBE;
   --chart-up: var(--theme-primary);
   --chart-down: var(--theme-secondary);
-  --chart-grid: rgba(0, 0, 0, 0.1);
-  --btn-bg: #e5e7eb;
-  --btn-text: #000000;
-  --btn-hover: #d1d5db;
+  --chart-grid: rgba(30, 39, 73, 0.08);
+  --btn-bg: #E3EDF4;
+  --btn-text: #1E2749;
+  --btn-hover: #D5E4EE;
+  --shadow-soft: 0 1px 2px rgba(30, 39, 73, 0.05), 0 8px 24px -12px rgba(74, 105, 206, 0.25);
+  --radius: 12px;
 }
 
 .dark {
-  --bg-main: #000000;
-  --bg-panel: #111111;
-  --bg-input: #000000;
-  --text-main: #ffffff;
-  --text-muted: #888888;
-  --border-main: #333333;
-  --border-focus: #ffffff;
-  --accent: var(--theme-primary);
+  --bg-main: #0C1122;
+  --bg-panel: #141B36;
+  --bg-input: #10162E;
+  --text-main: #E9EDFB;
+  --text-muted: #8B93BE;
+  --border-main: #262F58;
+  --border-focus: #81CFFF;
+  --accent: #6E86E8;
+  --accent-rgb: 110, 134, 232;
+  --accent-soft: rgba(129, 207, 255, 0.10);
+  --accent-2: #BCA4F5;
+  --accent-3: #81CFFF;
+  --highlight: #ECFFBE;
   --chart-up: var(--theme-primary);
   --chart-down: var(--theme-secondary);
-  --chart-grid: rgba(255, 255, 255, 0.1);
-  --btn-bg: #222222;
-  --btn-text: #ffffff;
-  --btn-hover: #333333;
+  --chart-grid: rgba(233, 237, 251, 0.07);
+  --btn-bg: #1B2445;
+  --btn-text: #E9EDFB;
+  --btn-hover: #242E57;
+  --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px -12px rgba(0, 0, 0, 0.5);
+  --radius: 12px;
+}
+
+::selection {
+  background: rgba(188, 164, 245, 0.35);
 }

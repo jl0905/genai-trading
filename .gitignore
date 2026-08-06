@@ -25,3 +25,10 @@ dist-ssr
 
 # Environment variables
 .env
+
+# Private agent instructions (contains personal identity info)
+CLAUDE.md
+
+# Python bytecode
+__pycache__/
+*.pyc

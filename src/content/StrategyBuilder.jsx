@@ -670,24 +670,35 @@ const StrategyBuilder = () => {
           )}
         </div>
 
-        {/* ── Skeleton state ── */}
-        {!results && !isBacktesting && !backtestError && (
+        {/* ── Skeleton state ──
+            Static placeholder while idle; shimmers only while a backtest is
+            actually running (manual run, Randomize auto-run, or any rule /
+            settings change that re-triggers the debounced run). */}
+        {!results && !backtestError && (
           <>
-            <style>{`
-              @keyframes skeletonShimmer {
-                0%   { background-position: -400px 0; }
-                100% { background-position: 400px 0; }
-              }
-            `}</style>
+            {isBacktesting && (
+              <style>{`
+                @keyframes skeletonShimmer {
+                  0%   { background-position: -400px 0; }
+                  100% { background-position: 400px 0; }
+                }
+              `}</style>
+            )}
             {(() => {
               const skeletonBar = (width, height = '22px') => (
                 <div style={{
                   width, height, borderRadius: '6px',
-                  background: isDark
-                    ? 'linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%)'
-                    : 'linear-gradient(90deg, rgba(0,0,0,0.04) 25%, rgba(0,0,0,0.08) 50%, rgba(0,0,0,0.04) 75%)',
-                  backgroundSize: '800px 100%',
-                  animation: 'skeletonShimmer 1.8s infinite ease-in-out',
+                  ...(isBacktesting
+                    ? {
+                        background: isDark
+                          ? 'linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%)'
+                          : 'linear-gradient(90deg, rgba(0,0,0,0.04) 25%, rgba(0,0,0,0.08) 50%, rgba(0,0,0,0.04) 75%)',
+                        backgroundSize: '800px 100%',
+                        animation: 'skeletonShimmer 1.8s infinite ease-in-out',
+                      }
+                    : {
+                        background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+                      }),
                 }} />
               );
               const skeletonCard = () => (
@@ -731,23 +742,16 @@ const StrategyBuilder = () => {
                       </div>
                     ))}
                   </div>
-                  {/* Helpful hint */}
-                  <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem', padding: '8px 0' }}>
-                    Add trading rules and run a backtest to populate these results.
-                  </div>
+                  {/* Helpful hint — only while idle; the shimmer itself signals loading */}
+                  {!isBacktesting && (
+                    <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem', padding: '8px 0' }}>
+                      Add trading rules and run a backtest to populate these results.
+                    </div>
+                  )}
                 </>
               );
             })()}
           </>
-        )}
-
-        {/* ── Loading ── */}
-        {isBacktesting && (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '16px', color: 'var(--text-muted)' }}>
-            <div style={{ width: '40px', height: '40px', border: '4px solid var(--border-main)', borderTopColor: 'var(--theme-primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-            <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
-            <div>Fetching data and simulating trades for <strong>{settings.symbol}</strong>…</div>
-          </div>
         )}
 
         {/* ── Error ── */}
