@@ -20,7 +20,7 @@ A React-based financial dashboard with real-time stock charts, technical analysi
 - Python integration natively via `main.py`
 - Python Scripts & Packages: `yfinance`, `requests`, `python-dotenv`, `pymongo`, `pydantic`
 - Database Integration: MongoDB (configurable via `MONGODB_URI` env var, defaults to `mongodb://localhost:27017/` locally) for user authentication storage
-- AI Integration: OpenRouter Tencent Hy3 Preview API (`tencent/hy3-preview:free`) via REST — requires `OPENROUTER_API_KEY` in `.env`
+- AI Integration: Google Gemini API (`gemini-flash-latest`) via the google-genai SDK — requires `GEMINI_API_KEY` in `.env`
 - Alpaca API Integration: For paper trading dashboard, simulated orders, and market-data volume profiles — configured in `alpaca_config.py`
 
 ## Project Structure
@@ -28,8 +28,9 @@ A React-based financial dashboard with real-time stock charts, technical analysi
 - `src/content/`: Tab components (`EntryVisual.jsx`, `SplineTab.jsx`, `tvInteractiveChart.jsx`, `PaperTrading.jsx`, `StrategyBuilder.jsx`, `Reader.jsx`) and supportive UI subcomponents.
 - `backend/main.py`: FastAPI application server serving all client-side data queries, integration tasks, backtesting simulations, and authentication flows.
 - `backend/scripts/`: Python utility modules for data fetching (`stockdata.py`, `googlefin.py`), AI analysis formatting (`chart_analyzer.py`), pure-Python backtesting (`backtest.py`), and broker integrations (`alpaca_config.py`).
-- `backend/requirements.txt`: Python dependency manifest for production deployment (Render, Railway, etc.).
-- `.env`: Environment variables file located at the project root (not committed) — securely retains `OPENROUTER_API_KEY`.
+- `requirements.txt` (repo root): Python dependency manifest used by both local development and the Vercel Python runtime.
+- `api/index.py` + `vercel.json`: Vercel serverless entrypoint — wraps the FastAPI app and rewrites `/api/*` requests to it.
+- `.env`: Environment variables file located at the project root (not committed) — securely retains `GEMINI_API_KEY`.
 
 ## Essential Commands & Endpoints
 - **Start App**: `npm run start` (Runs both frontend dev server and FastAPI backend concurrently via `concurrently`). *Note: Modifying backend Python scripts requires terminating and re-running `npm start` to apply server-side updates.*
@@ -41,7 +42,7 @@ A React-based financial dashboard with real-time stock charts, technical analysi
   - `GET /api/stock/range?symbol=AAPL&start=2024-01-01&end=2024-07-01` — Targeted date-range extraction for responsive client dynamic rendering.
   - `GET /api/stocks/multi` — Aggregated top stock market movers snapshot.
   - `GET /api/search?q=AAPL` — Proxies Yahoo Finance search, intelligently filtering exclusively to US equities and ETFs.
-  - `POST /api/analyze` — Transmits currently visible OHLCV client snapshot window to OpenRouter LLM (Tencent Hy3) for AI-generated structural technical analysis.
+  - `POST /api/analyze` — Transmits currently visible OHLCV client snapshot window to Google Gemini for AI-generated structural technical analysis.
   - `POST /api/backtest` — Executes pure-Python rule-based strategy simulations against verified historical OHLCV data arrays returning statistical performance metrics, trade logs, and equity progression traces.
   - `GET /api/alpaca/paper` — Interrogates configured Alpaca Paper Trading environment for portfolio valuations, current balances, active positions, and open/recent orders.
   - `POST /api/alpaca/paper/order` — Submits paper orders directly to the Alpaca simulation broker engine.
@@ -62,10 +63,9 @@ A React-based financial dashboard with real-time stock charts, technical analysi
 - API backends cleanly serialize native Python structures to strict JSON schemas consumed predictably by client architectures.
 
 ## Deployment
-- **Unified Deploy (Render)**: A multi-stage `Dockerfile` builds the Vite frontend (Node stage) and runs the FastAPI backend (Python stage) as a single service. FastAPI serves the built `dist/` as static files alongside the `/api/*` routes. Render auto-detects the Dockerfile — set runtime to **Docker**, no root directory override needed.
-- **Split Deploy (optional)**: Frontend can be deployed separately on **Vercel** (`vite build`) with `VITE_API_URL` pointing to the backend origin. Backend deploys on Render as a Python Web Service (root: `backend/`, start: `uvicorn main:app --host 0.0.0.0 --port $PORT`).
-- **Environment Variables on Render**: `OPENROUTER_API_KEY` (required for AI analysis), `MONGODB_URI` (optional, for auth — defaults to localhost if unset).
-- `VITE_API_URL` is a **build-time** variable — only needed for split deploys. In unified mode, the frontend uses relative `/api` paths automatically.
+- **Vercel (single deployment)**: Vercel builds the Vite frontend (`vite build`) and serves it from its CDN, while the FastAPI backend runs as a Python serverless function. `api/index.py` exposes the ASGI `app` from `backend/main.py`, and `vercel.json` rewrites all `/api/*` requests to it. Python dependencies install from the root `requirements.txt`.
+- **Environment Variables on Vercel**: `GEMINI_API_KEY` (required for AI analysis), `MONGODB_URI` (optional, for auth — defaults to localhost if unset). Set them in Project Settings → Environment Variables; never prefix secrets with `VITE_` (that would embed them in the public frontend bundle).
+- `VITE_API_URL` stays unset — frontend and backend share one origin on Vercel, so the client uses relative `/api` paths automatically.
 
 ## Theming & Styling
 - The application implements global custom primary CSS tokens via `var(--theme-primary)` (default: `#8BA97F` / Sage Green) styling accent elements, positive asset price counters, bullish candlesticks, volume indicators, and analytical focus highlights.

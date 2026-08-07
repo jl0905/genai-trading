@@ -7,8 +7,12 @@ a natural-language technical analysis of the price action.
 
 import os
 from statistics import mean, stdev
-from openai import OpenAI
-import openai
+from google import genai
+from google.genai import errors as genai_errors
+
+# Alias that always points at the current Flash model — avoids the
+# "model no longer available to new users" retirement errors.
+GEMINI_MODEL = "gemini-flash-latest"
 
 
 def _compute_metrics(data: list[dict]) -> dict:
@@ -111,11 +115,11 @@ def analyze_chart(symbol: str, company_name: str, sector: str,
     """
     Main entry point.  Accepts visible OHLCV rows and returns an AI analysis.
     """
-    api_key = os.getenv("OPENROUTER_API_KEY", "")
+    api_key = os.getenv("GEMINI_API_KEY", "")
     if not api_key:
         return {
             "success": False,
-            "error": "OPENROUTER_API_KEY is not set. Please add it to your .env file.",
+            "error": "GEMINI_API_KEY is not set. Please add it to your .env file.",
         }
 
     if not data or len(data) < 2:
@@ -130,59 +134,33 @@ def analyze_chart(symbol: str, company_name: str, sector: str,
     )
 
     try:
-        client = OpenAI(
-            base_url="https://openrouter.ai/api/v1",
-            api_key=api_key,
+        client = genai.Client(api_key=api_key)
+
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=user_prompt,
+            config=genai.types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                temperature=0.7,
+            ),
         )
 
-        response = client.chat.completions.create(
-            model="google/gemma-4-31b-it:free",#"openai/gpt-oss-120b:free",
-            messages=[
-                {"role": "user", "content": f"{system_prompt}\n\n{user_prompt}"}
-            ],
-            temperature=0.7,
-            extra_headers={
-                "HTTP-Referer": "http://localhost:3000",
-                "X-Title": "GenAI Trading Dashboard"
-            },
-            extra_body={"reasoning": {"enabled": True}}
-        )
-
-        if not response.choices:
-            return {"success": False, "error": "No response from OpenRouter API."}
-
-        message = response.choices[0].message
-        content = message.content
-        
+        content = response.text
         if not content:
-            if hasattr(message, 'refusal') and message.refusal:
-                return {"success": False, "error": f"Model refused: {message.refusal}"}
             return {"success": False, "error": "Model returned an empty response."}
-
-        # Add reasoning output if the model provided it
-        text = content.strip()
-        reasoning_text = None
-        
-        # Depending on how the openai SDK maps OpenRouter's extra fields
-        if hasattr(message, 'reasoning_details'):
-            reasoning_text = message.reasoning_details
-        elif hasattr(message, 'reasoning'):
-            reasoning_text = message.reasoning
-        elif hasattr(message, 'model_extra') and message.model_extra:
-            reasoning_text = message.model_extra.get('reasoning')
 
         return {
             "success": True,
-            "analysis": text,
+            "analysis": content.strip(),
             "metrics": metrics,
-            "reasoning": reasoning_text,
+            "reasoning": None,
         }
 
-    except openai.APIConnectionError as e:
-        return {"success": False, "error": "Failed to connect to OpenRouter API."}
-    except openai.RateLimitError as e:
-        return {"success": False, "error": "OpenRouter API rate limit exceeded."}
-    except openai.APIError as e:
-        return {"success": False, "error": f"OpenRouter API error: {str(e)}"}
+    except genai_errors.ClientError as e:
+        if e.code == 429:
+            return {"success": False, "error": "Gemini API rate limit exceeded — free tier quota used up. Try again later."}
+        return {"success": False, "error": f"Gemini API error: {e.message or str(e)}"}
+    except genai_errors.ServerError as e:
+        return {"success": False, "error": f"Gemini API is currently unavailable: {e.message or str(e)}"}
     except Exception as e:
         return {"success": False, "error": f"Unexpected error: {str(e)}"}

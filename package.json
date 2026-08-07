@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "server": "uvicorn backend.main:app --port 3000",
-    "server:dev": "uvicorn backend.main:app --reload --port 3000",
+    "server:dev": "uvicorn backend.main:app --reload --reload-dir backend --port 3000",
     "start": "concurrently \"npm run server:dev\" \"npm run dev\""
   },
   "dependencies": {

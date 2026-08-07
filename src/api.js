@@ -1,5 +1,5 @@
-// In production (single-origin deploy), VITE_API_URL can be left unset — '/api' works.
-// For split deploys (e.g. Vercel frontend + Render backend), set VITE_API_URL to the backend origin.
+// In production (Vercel single-origin deploy), VITE_API_URL stays unset — '/api' works.
+// Set VITE_API_URL only if the backend ever lives on a different origin.
 // Locally it falls back to localhost:3000.
 const API_BASE_URL = import.meta.env.VITE_API_URL
   ? `${import.meta.env.VITE_API_URL}/api`
